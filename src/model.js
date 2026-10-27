@@ -3,6 +3,7 @@ export const CARD_W = 160, CARD_H = 240, CELL = 80;
 export const COLORS = { orange:'#dd791d', lemon:'#dfba32', lime:'#75a646', ivory:'#e6ddcb' };
 export const FRUIT_NAMES = { orange:'橘子', lemon:'柠檬', lime:'酸橙', ivory:'标准' };
 export const GROVE_FACES = [2,3,4,5,6,10];
+export const DEFAULT_SCATTER = 1;
 const layouts = {
   1:['l1','y2','o2','_','o1','l1'],3:['_','o1','l2','o2','y1','y1'],5:['_','o2','o1','y1','l2','y1'],
   7:['o2','_','y2','l1','l1','o1'],9:['y1','o2','l2','_','y1','l1'],11:['l1','l1','y2','o2','y1','_'],
@@ -18,16 +19,16 @@ export function shuffled(items, random=Math.random){const a=[...items];for(let i
 export function baseObject(type,x,y,z=1){return {id:uid(),type,x,y,z,rotation:0,locked:false};}
 export function newGame(random=Math.random){
   const all=shuffled(builtinAssets.map(a=>a.id),random);
-  const objects=[];
+  const objects=[],tilt=()=>(random()-.5)*DEFAULT_SCATTER*2;
   objects.push({...baseObject('card',680,380,1),assetId:all[0],faceUp:true,planted:true});
-  objects.push({...baseObject('card',590,820,3),assetId:all[1],faceUp:true,rotation:-3});
-  objects.push({...baseObject('card',815,825,4),assetId:all[2],faceUp:true,rotation:2});
-  objects.push({...baseObject('deck',245,360,2),cards:all.slice(3,9),faceUp:false,name:'本局牌堆',rotation:-3});
-  objects.push({...baseObject('deck',245,740,2),cards:all.slice(9),faceUp:false,name:'下一局 · 备用',rotation:4,reserve:true});
-  for(const [c,color] of ['orange','lemon','lime'].entries()) for(let r=0;r<5;r++) objects.push({...baseObject('die',1090+c*78,300+r*82,20+r),color,value:2,faces:[...GROVE_FACES],rotation:(random()-.5)*16});
-  objects.push({...baseObject('token',1110,785,25),kind:'squirrel',color:'#b86231',name:'松鼠',rotation:-8});
-  objects.push({...baseObject('token',1225,785,26),kind:'wheelbarrow',color:'#7fa75e',name:'独轮车',rotation:10});
-  return {version:VERSION,name:'果丛 · 我的桌面',objects,assets:[],settings:{sound:true,grid:false,snap:true,scatter:3,theme:'forest'},mode:'play',createdAt:Date.now()};
+  objects.push({...baseObject('card',590,820,3),assetId:all[1],faceUp:true,rotation:tilt()});
+  objects.push({...baseObject('card',815,825,4),assetId:all[2],faceUp:true,rotation:tilt()});
+  objects.push({...baseObject('deck',245,360,2),cards:all.slice(3,9),faceUp:false,name:'本局牌堆',rotation:tilt()});
+  objects.push({...baseObject('deck',245,740,2),cards:all.slice(9),faceUp:false,name:'下一局 · 备用',rotation:tilt(),reserve:true});
+  for(const [c,color] of ['orange','lemon','lime'].entries()) for(let r=0;r<5;r++) objects.push({...baseObject('die',1090+c*78,300+r*82,20+r),color,value:2,faces:[...GROVE_FACES],rotation:tilt()});
+  objects.push({...baseObject('token',1110,785,25),kind:'squirrel',color:'#b86231',name:'松鼠',rotation:tilt()});
+  objects.push({...baseObject('token',1225,785,26),kind:'wheelbarrow',color:'#7fa75e',name:'独轮车',rotation:tilt()});
+  return {version:VERSION,name:'果丛 · 我的桌面',objects,assets:[],settings:{sound:true,grid:false,snap:true,scatter:DEFAULT_SCATTER,scatterDefaultVersion:2,theme:'forest'},mode:'play',createdAt:Date.now()};
 }
 export function assetFor(state,id){return [...builtinAssets,...state.assets].find(a=>a.id===id);}
 export function nextZ(state){return Math.max(1,...state.objects.map(o=>o.z))+1;}
@@ -74,5 +75,34 @@ export function validateSession(raw){
     if(o.width!==undefined&&!finite(o.width,20,2000)||o.height!==undefined&&!finite(o.height,20,2000))throw new Error('物件尺寸无效');
   }
   if(!finite(raw.settings.scatter,0,12)||!['forest','linen','night'].includes(raw.settings.theme)||!['play','edit'].includes(raw.mode))throw new Error('桌面设置无效');
-  return structuredClone(raw);
+  const result=structuredClone(raw);
+  if(raw.setup!==undefined)result.setup=validateSetup(raw.setup,raw);
+  return result;
+}
+
+// Setup uses the same object vocabulary as the tabletop, without runtime IDs.
+export function captureSetup(state){
+  return {name:'我的初始设置',randomizeCards:false,shuffleDecks:false,rollDice:false,objects:state.objects.map(({id,...object})=>structuredClone(object))};
+}
+export function validateSetup(raw,state){
+  if(!raw||typeof raw.name!=='string'||!raw.name.trim()||raw.name.length>100||!Array.isArray(raw.objects))throw new Error('初始设置需要名称和 objects 物件列表');
+  for(const key of ['randomizeCards','shuffleDecks','rollDice'])if(typeof raw[key]!=='boolean')throw new Error(`${key} 请填写 true 或 false`);
+  const objects=raw.objects.map((o,i)=>({...o,id:`setup-${i}`}));
+  // Validate all references and numbers, but never recursively validate a setup.
+  const {setup,...session}=state;
+  validateSession({...session,objects});
+  return {name:raw.name.trim(),randomizeCards:raw.randomizeCards,shuffleDecks:raw.shuffleDecks,rollDice:raw.rollDice,objects:objects.map(({id,...o})=>o)};
+}
+export function applySetup(state,setup=state.setup,random=Math.random){
+  const valid=validateSetup(setup,state),objects=valid.objects.map(o=>({...structuredClone(o),id:uid()}));
+  if(valid.randomizeCards){
+    const pool=shuffled(objects.flatMap(o=>o.type==='card'?[o.assetId]:o.type==='deck'?o.cards:[]),random);
+    let index=0;
+    for(const o of objects)if(o.type==='card')o.assetId=pool[index++];else if(o.type==='deck'){const count=o.cards.length;o.cards=pool.slice(index,index+count);index+=count;}
+  }
+  for(const o of objects){
+    if(valid.shuffleDecks&&o.type==='deck')o.cards=shuffled(o.cards,random);
+    if(valid.rollDice&&o.type==='die')o.value=o.faces[Math.floor(random()*o.faces.length)];
+  }
+  return {...state,objects};
 }

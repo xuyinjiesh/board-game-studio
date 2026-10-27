@@ -1,7 +1,34 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile,access} from 'node:fs/promises';
-import {builtinAssets,newGame,assetFor,scoreTable,treeAt,snapCard,drawFromDeck,mergeCards,validateSession,shuffled,baseObject} from '../src/model.js';
+import {builtinAssets,newGame,assetFor,scoreTable,treeAt,snapCard,drawFromDeck,mergeCards,validateSession,shuffled,baseObject,captureSetup,validateSetup,applySetup} from '../src/model.js';
+
+test('setup restores a captured layout with fresh IDs and survives session export/import',()=>{
+  const s=newGame();s.setup=captureSetup(s);const before=structuredClone(s);
+  s.objects[0].x=999;s.objects.find(o=>o.type==='die').value=10;
+  const restored=applySetup(validateSession(JSON.parse(JSON.stringify(s))));
+  assert.deepEqual(captureSetup(restored),before.setup);
+  assert.notEqual(restored.objects[0].id,before.objects[0].id);
+  assert.equal(s.objects[0].x,999);assert.deepEqual(restored.setup,before.setup);
+});
+test('setup randomness conserves every card and pile size, and uses valid die faces',()=>{
+  const s=newGame(()=>.5),setup=captureSetup(s);setup.randomizeCards=true;setup.rollDice=true;setup.shuffleDecks=true;
+  const result=applySetup(s,setup,()=>0);
+  const inventory=objects=>objects.flatMap(o=>o.type==='card'?[o.assetId]:o.type==='deck'?o.cards:[]).sort();
+  assert.deepEqual(inventory(result.objects),inventory(s.objects));
+  assert.deepEqual(result.objects.filter(o=>o.type==='deck').map(o=>o.cards.length),[6,9]);
+  assert.notEqual(result.objects[0].assetId,s.objects[0].assetId);
+  assert.ok(result.objects.filter(o=>o.type==='die').every(o=>o.faces.includes(o.value)));
+  assert.deepEqual(captureSetup(s).objects,setup.objects);
+});
+test('invalid setup cannot enter a saved session or overwrite the live table',()=>{
+  const s=newGame(),baseline=structuredClone(s);
+  for(const corrupt of [p=>p.objects[0].x=Infinity,p=>p.objects[0].assetId='missing',p=>p.rollDice='yes',p=>p.objects.find(o=>o.type==='die').value=99]){
+    const setup=captureSetup(s);corrupt(setup);
+    assert.throws(()=>validateSetup(setup,s));assert.throws(()=>validateSession({...s,setup}));
+    assert.throws(()=>applySetup(s,setup));assert.deepEqual(s,baseline);
+  }
+});
 
 test('Grove opens with all 18 unique cards split into 9 playable and 9 reserve, 15 dice and two tokens',()=>{
   const s=newGame(()=>.42),cards=s.objects.filter(o=>o.type==='card'),decks=s.objects.filter(o=>o.type==='deck');
