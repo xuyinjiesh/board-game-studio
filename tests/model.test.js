@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile,access} from 'node:fs/promises';
-import {builtinAssets,newGame,assetFor,scoreTable,treeAt,snapCard,drawFromDeck,mergeCards,validateSession,shuffled,baseObject,captureSetup,validateSetup,applySetup,objectsInRect} from '../src/model.js';
+import {assetFor,drawFromDeck,mergeCards,validateSession,shuffled,baseObject,captureSetup,validateSetup,applySetup,objectsInRect} from '../src/model.js';
+import {builtinAssets,createGroveSession as newGame,scoreTable,treeAt,snapCard} from '../src/games/grove.js';
 
 test('marquee intersects rotated pieces, excludes locked objects and the underlying board',()=>{
   const s=newGame();s.objects=[
