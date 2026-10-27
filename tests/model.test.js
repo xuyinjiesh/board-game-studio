@@ -1,7 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile,access} from 'node:fs/promises';
-import {builtinAssets,newGame,assetFor,scoreTable,treeAt,snapCard,drawFromDeck,mergeCards,validateSession,shuffled,baseObject,captureSetup,validateSetup,applySetup} from '../src/model.js';
+import {builtinAssets,newGame,assetFor,scoreTable,treeAt,snapCard,drawFromDeck,mergeCards,validateSession,shuffled,baseObject,captureSetup,validateSetup,applySetup,objectsInRect} from '../src/model.js';
+
+test('marquee intersects rotated pieces, excludes locked objects and the underlying board',()=>{
+  const s=newGame();s.objects=[
+    {...baseObject('die',100,100),color:'orange',rotation:45},
+    {...baseObject('die',180,100),locked:true},
+    {...baseObject('board',100,100),assetId:'grove-1'},
+    {...baseObject('token',300,100),kind:'disc'}
+  ];
+  assert.deepEqual(objectsInRect(s,{left:65,right:135,top:65,bottom:135}).map(o=>o.id),[s.objects[0].id]);
+  // These corners overlap the rotated die's bounding box, but not the die itself.
+  assert.equal(objectsInRect(s,{left:65,right:70,top:65,bottom:70}).length,0);
+  assert.equal(objectsInRect(s,{left:0,right:400,top:0,bottom:200}).length,2);
+});
 
 test('setup restores a captured layout with fresh IDs and survives session export/import',()=>{
   const s=newGame();s.setup=captureSetup(s);const before=structuredClone(s);

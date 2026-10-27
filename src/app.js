@@ -1,4 +1,4 @@
-import {builtinAssets,newGame,captureSetup,validateSetup,applySetup,assetFor,baseObject,uid,nextZ,dimensions,pointOnObject,treeAt,scoreTable,snapCard,snapSmall,drawFromDeck,mergeCards,shuffled,validateSession,COLORS,FRUIT_NAMES,GROVE_FACES} from './model.js';
+import {builtinAssets,newGame,captureSetup,validateSetup,applySetup,assetFor,baseObject,uid,nextZ,dimensions,objectsInRect,pointOnObject,treeAt,scoreTable,snapCard,snapSmall,drawFromDeck,mergeCards,shuffled,validateSession,COLORS,FRUIT_NAMES,GROVE_FACES} from './model.js';
 import {sound} from './audio.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -136,7 +136,7 @@ function remove(){const items=selection().filter(isMovable);if(!items.length)ret
 function duplicate(){const items=selection();if(!items.length)return;mutate(()=>{const added=items.map(o=>({...structuredClone(o),id:uid(),x:o.x+45,y:o.y+45,z:nextZ(state)+1,locked:false}));state.objects.push(...added);selected=new Set(added.map(o=>o.id));},{audio:'drop'});}
 function openModal(html,wide=false){$('#modal').dataset.kind='';$('#modal-content').innerHTML=html;$('#modal').classList.toggle('wide',wide);if(!$('#modal').open)$('#modal').showModal();}
 function rules(){openModal(`<span class="section-eyebrow">GROVE · HOW TO PLAY</span><h2>九张牌，一座果园。</h2><p class="modal-lead">作者 Mark Tuck · 中文汉化 楚洋 · 约 10 分钟</p><div class="rules-layout"><div><ol class="rule-steps"><li><strong>布置果园</strong><p>18 张牌洗匀，取 9 张用于本局，另外 9 张备用。翻开首张作为起始果园，再抽两张放在待打区。</p></li><li><strong>叠放一张牌</strong><p>可旋转 90° 或 180°。至少一个格子与果园重叠；重叠的水果须同色。空地可以盖住任意树，有骰子的空地被树覆盖时须与骰子同色。</p></li><li><strong>记录收获</strong><p>首次同色重叠，放置骰子，点数等于两棵树的水果总数。再次覆盖，增加新树的水果数量。超过 6 变为 10，再次收获可用唯一的独轮车替换，计 15 分。</p></li><li><strong>补牌与结算</strong><p>补一张待打牌，直到用完本局 9 张。空地上的骰子不计分。松鼠允许一次不匹配的覆盖，但不能再被覆盖；结算扣 1 分，每颗正交相邻收获骰再扣 1 分。</p></li></ol><div class="rule-notice"><strong>这是一张自由桌面</strong><p>摆牌合法性、补牌和骰子增值由你操作；右侧自动统计匹配果树上的骰值。食谱挑战请按卡背条件自行加算。此版本没有自动裁判或手牌区。</p></div><a class="primary-button" href="/assets/grove-original.pdf" target="_blank" rel="noopener">打开完整原版规则与 PNP ↗</a></div><a href="/assets/grove-original.pdf" target="_blank" rel="noopener"><img class="rules-sheet" src="/assets/rules.webp" alt="果丛原版中文规则"></a></div>`,true);}
-function help(){openModal(`<span class="section-eyebrow">A LITTLE GUIDE</span><h2>把鼠标，当作你的手。</h2><p class="modal-lead">随手摆放，认真游玩。</p><div class="shortcut-list">${[['Ctrl + E','切换游玩 / 编辑模式'],['Esc（游玩时）','显示编辑入口'],['拖动物件','拿起、移动、松手摆放'],['拖动空白 / 空白处中键 / 空格拖动','平移桌面'],['滚轮 / ＋ / −','缩放桌面'],['Shift + 点击','选择多个物件'],['双击卡牌 / F','翻转正反面'],['卡牌中键 / Shift + 中键','旋转 90° / −90°'],['R / Shift + R','旋转 90° / −90°'],['双击牌堆','抽取顶牌'],['G','多选卡牌，合成牌堆'],['Alt + 拖到另一张牌上','合并为牌堆'],['D / 双击骰子','投掷选中骰子'],['选中骰子 + 数字键','切换对应骰面；0 = 10 点'],['右键卡牌 / Space','查看卡牌详情'],['右键其他部件','打开物件属性'],['Ctrl + D / Delete','复制 / 移除'],['Ctrl + Z / Ctrl + Shift + Z','撤销 / 重做'],['Esc','关闭弹窗 / 取消选择']].map(([k,v])=>`<div><kbd>${k}</kbd><span>${v}</span></div>`).join('')}</div><p class="subtle-note">图片与进度保存在当前浏览器。导出桌面可备份或换设备继续。触屏支持单指拖动与缩放按钮。</p>`);}
+function help(){openModal(`<span class="section-eyebrow">A LITTLE GUIDE</span><h2>把鼠标，当作你的手。</h2><p class="modal-lead">随手摆放，认真游玩。</p><div class="shortcut-list">${[['Ctrl + E','切换游玩 / 编辑模式'],['Esc（游玩时）','显示编辑入口'],['拖动物件','拿起、移动、松手摆放'],['空白处左键拖动','框选多个部件；拖动其中一个一起移动'],['Shift + 框选','追加选择部件'],['按住中键拖动','平移桌面'],['滚轮 / ＋ / −','缩放桌面'],['Shift + 点击','选择多个物件'],['双击卡牌 / F','翻转正反面'],['卡牌中键 / Shift + 中键','旋转 90° / −90°'],['R / Shift + R','旋转 90° / −90°'],['双击牌堆','抽取顶牌'],['G','多选卡牌，合成牌堆'],['Alt + 拖到另一张牌上','合并为牌堆'],['D / 双击骰子','投掷选中骰子'],['选中骰子 + 数字键','切换对应骰面；0 = 10 点'],['右键卡牌 / Space','查看卡牌详情'],['右键其他部件','打开物件属性'],['Ctrl + D / Delete','复制 / 移除'],['Ctrl + Z / Ctrl + Shift + Z','撤销 / 重做'],['Esc','关闭弹窗 / 取消选择']].map(([k,v])=>`<div><kbd>${k}</kbd><span>${v}</span></div>`).join('')}</div><p class="subtle-note">图片与进度保存在当前浏览器。导出桌面可备份或换设备继续。触屏支持单指拖动与缩放按钮。</p>`);}
 function inspect(){const o=primary();if(!o)return;if(o.type==='card')openModal(`<span class="section-eyebrow">${escape(objectName(o))}</span><h2>${o.faceUp?'果园正面':'食谱背面'}</h2><div class="large-card">${cardFace(texture(o.assetId,o.faceUp),!o.faceUp)}</div><button class="primary-button" data-action="inspect-flip">⤾ 查看另一面</button>${state.mode==='edit'?'<button class="full-width quiet" data-action="properties">编辑卡牌属性 ↗</button>':''}`);else if(o.type==='board')openModal(`<h2>${escape(objectName(o))}</h2><img class="large-board" src="${escape(texture(o.assetId))}" alt="版图">`,true);else notify('在右侧面板中调整物件属性');}
 function exportSession(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`桌间-果丛-${new Date().toISOString().slice(0,10)}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify('桌面已导出，包含自定义图片和所有物件');}
 function confirmNew(){openModal(`<span class="section-eyebrow">A FRESH START</span><h2>${state.setup?'从初始设置开始。':'再种一座果园。'}</h2><p class="modal-lead">${state.setup?`使用「${escape(state.setup.name)}」布置 ${state.setup.objects.length} 个物件。`:'洗匀 18 张卡牌，重新分配本局和备用牌堆。'}当前布局将被替换，你仍可用撤销恢复。</p><button class="primary-button" data-action="confirm-new">开始新一局 ↗</button><button class="full-width quiet" data-action="export">先导出当前桌面</button>`);}
@@ -179,24 +179,36 @@ document.addEventListener('change',e=>{
 });
 
 viewport.addEventListener('pointerdown',e=>{
-  if(e.target.closest('button,.view-tools'))return;if(e.button!==0&&e.button!==1)return;
+  if(drag||e.target.closest('button,.view-tools'))return;if(e.button!==0&&e.button!==1)return;
+  viewport.focus({preventScroll:true});
   const node=e.target.closest('.table-object'),o=node&&state.objects.find(x=>x.id===node.dataset.id);
-  if(e.button===1&&o?.type==='card'&&!spaceDown){e.preventDefault();select(o);rotate(e.shiftKey?-90:90);return;}
-  if(e.button===1||spaceDown||!o){if(spaceDown)spaceUsed=true;drag={kind:'pan',sx:e.clientX,sy:e.clientY,pan:{...pan},moved:false,clear:!spaceDown&&!o&&!e.shiftKey};viewport.setPointerCapture(e.pointerId);viewport.classList.add('panning');e.preventDefault();return;}
+  if(spaceDown)spaceUsed=true;
+  if(e.button===1){drag={kind:'pan',pointerId:e.pointerId,sx:e.clientX,sy:e.clientY,pan:{...pan},moved:false,rotateId:o?.type==='card'&&!spaceDown?o.id:null,reverse:e.shiftKey};viewport.setPointerCapture(e.pointerId);viewport.classList.add('panning');e.preventDefault();return;}
+  if(!o){drag={kind:'marquee',pointerId:e.pointerId,sx:e.clientX,sy:e.clientY,moved:false,add:e.shiftKey,selected:[...selected]};viewport.setPointerCapture(e.pointerId);e.preventDefault();return;}
   if(e.shiftKey){select(o,true);e.preventDefault();return;}
   if(!selected.has(o.id))select(o);if(o.locked||rolling.has(o.id))return;
-  const items=selection().filter(isMovable);drag={kind:'object',sx:e.clientX,sy:e.clientY,ids:items.map(x=>x.id),starts:items.map(x=>({id:x.id,x:x.x,y:x.y,rotation:x.rotation})),moved:false,alt:e.altKey};viewport.setPointerCapture(e.pointerId);e.preventDefault();
+  const items=selection().filter(o=>isMovable(o)&&!rolling.has(o.id));drag={kind:'object',pointerId:e.pointerId,sx:e.clientX,sy:e.clientY,ids:items.map(x=>x.id),starts:items.map(x=>({id:x.id,x:x.x,y:x.y,rotation:x.rotation})),moved:false,alt:e.altKey};viewport.setPointerCapture(e.pointerId);e.preventDefault();
 });
 viewport.addEventListener('pointermove',e=>{
   if(!drag)return;const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
   if(!drag.moved&&Math.hypot(dx,dy)<3)return;
-  if(!drag.moved){drag.moved=true;if(drag.kind==='object'){checkpoint();selection().filter(isMovable).forEach((o,i)=>{if(o.type!=='board')o.z=nextZ(state)+i;});play('flip');}}
+  if(!drag.moved){drag.moved=true;if(drag.kind==='object'){checkpoint();state.objects.filter(o=>drag.ids.includes(o.id)).forEach((o,i)=>{if(o.type!=='board')o.z=nextZ(state)+i;});play('flip');}}
   if(drag.kind==='pan'){pan={x:drag.pan.x+dx,y:drag.pan.y+dy};transformScene();return;}
-  for(const start of drag.starts){const o=state.objects.find(x=>x.id===start.id);if(!o)continue;o.x=Math.max(-10000,Math.min(10000,start.x+dx/zoom));o.y=Math.max(-10000,Math.min(10000,start.y+dy/zoom));const node=objectNodes.get(o.id);node?.classList.add('dragging');node?.style.setProperty('--x',`${o.x}px`);node?.style.setProperty('--y',`${o.y}px`);if(node)node.style.zIndex=objectLayer(o);}
+  if(drag.kind==='marquee'){updateMarquee(e);return;}
+  const moveX=Math.max(...drag.starts.map(o=>-10000-o.x),Math.min(dx/zoom,...drag.starts.map(o=>10000-o.x)));
+  const moveY=Math.max(...drag.starts.map(o=>-10000-o.y),Math.min(dy/zoom,...drag.starts.map(o=>10000-o.y)));
+  for(const start of drag.starts){const o=state.objects.find(x=>x.id===start.id);if(!o)continue;o.x=start.x+moveX;o.y=start.y+moveY;const node=objectNodes.get(o.id);node?.classList.add('dragging');node?.style.setProperty('--x',`${o.x}px`);node?.style.setProperty('--y',`${o.y}px`);if(node)node.style.zIndex=objectLayer(o);}
 });
+function updateMarquee(e){
+  const r=viewport.getBoundingClientRect(),left=Math.max(0,Math.min(drag.sx,e.clientX)-r.left),top=Math.max(0,Math.min(drag.sy,e.clientY)-r.top),right=Math.min(r.width,Math.max(drag.sx,e.clientX)-r.left),bottom=Math.min(r.height,Math.max(drag.sy,e.clientY)-r.top);
+  const marquee=$('#selection-marquee');marquee.hidden=false;marquee.style.cssText=`left:${left}px;top:${top}px;width:${right-left}px;height:${bottom-top}px`;
+  const matches=objectsInRect(state,{left:(left-pan.x)/zoom,top:(top-pan.y)/zoom,right:(right-pan.x)/zoom,bottom:(bottom-pan.y)/zoom}).filter(o=>!rolling.has(o.id));
+  selected=new Set([...(drag.add?drag.selected:[]),...matches.map(o=>o.id)]);renderSelection();
+}
 function endDrag(e,cancelled=false){
   if(!drag)return;const previous=drag;drag=null;viewport.classList.remove('panning');if(viewport.hasPointerCapture(e.pointerId))viewport.releasePointerCapture(e.pointerId);
-  if(previous.kind==='pan'){if(!previous.moved&&previous.clear)select(null);return;}
+  if(previous.kind==='pan'){if(cancelled){pan=previous.pan;transformScene();}else if(!previous.moved&&previous.rotateId){const o=state.objects.find(o=>o.id===previous.rotateId);if(o){select(o);rotate(previous.reverse?-90:90);}}return;}
+  if(previous.kind==='marquee'){$('#selection-marquee').hidden=true;if(cancelled)selected=new Set(previous.selected);else if(!previous.moved&&!previous.add)selected.clear();renderSelection();renderInspector();if(previous.moved&&!cancelled&&selected.size)notify(`已选中 ${selected.size} 个部件，拖动其中一个即可一起移动`);return;}
   if(previous.moved){
     if(cancelled){state=JSON.parse(history.pop());render();return;}
     let didStack=false;
@@ -209,9 +221,11 @@ viewport.addEventListener('pointerup',e=>endDrag(e));viewport.addEventListener('
 viewport.addEventListener('dblclick',e=>{const node=e.target.closest('.table-object')||document.elementFromPoint(e.clientX,e.clientY)?.closest('.table-object');if(!node)return;const o=state.objects.find(x=>x.id===node.dataset.id);select(o);if(o.type==='card')flip();else if(o.type==='deck')draw();else if(o.type==='die')roll();});
 viewport.addEventListener('wheel',e=>{e.preventDefault();const r=viewport.getBoundingClientRect();zoomAt(Math.exp(-e.deltaY*.001),e.clientX-r.left,e.clientY-r.top);},{passive:false});
 viewport.addEventListener('contextmenu',e=>{const node=e.target.closest('.table-object');if(!node)return;e.preventDefault();const o=state.objects.find(x=>x.id===node.dataset.id);if(!o)return;select(o);if(o.type==='card')inspect();else properties();});
-viewport.addEventListener('auxclick',e=>{if(e.button===1&&e.target.closest('.table-object.card'))e.preventDefault();});
+viewport.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault();});
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='e'&&!$('#modal').open&&!drag){e.preventDefault();setMode(state.mode==='play'?'edit':'play');return;}
+  if(e.key==='Escape'&&drag){e.preventDefault();endDrag({pointerId:drag.pointerId},true);return;}
+  if(drag)return;
   if(e.key==='Escape'&&!$('#modal').open){if(activeDrawer){setDrawer(null);return;}select(null);if(state.mode==='play')revealEditor();return;}
   if(e.target.matches('input,textarea,select')||$('#modal').open)return;
   const k=e.key.toLowerCase(),ctrl=e.ctrlKey||e.metaKey;

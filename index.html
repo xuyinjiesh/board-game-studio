@@ -17,7 +17,8 @@
       <div class="library-bottom"><button class="text-button hidden" data-action="blank-table">新建空白桌面 <span>＋</span></button><button class="import-button" data-action="import-assets"><span>＋</span> 导入图片资产</button><button class="text-button" data-action="import-session">打开桌面存档 <span>↗</span></button><p>灵感落在桌上，游戏由你定义。</p></div>
     </aside>
     <main class="main-area">
-      <div class="table-viewport" id="viewport" tabindex="0" aria-label="桌游桌面，拖动空白处移动视角，滚轮缩放">
+      <div class="table-viewport" id="viewport" tabindex="0" aria-label="桌游桌面，空白处左键拖动框选，中键拖动移动视角，滚轮缩放">
+        <div id="selection-marquee" hidden aria-hidden="true"></div>
         <div class="table-atmosphere"></div>
         <div class="scene" id="scene"><div class="surface"></div><div class="grid-overlay" id="grid"></div><div class="zone deck-zone"><span>抽牌区</span><small>DRAW PILE</small></div><div class="zone orchard-zone"><span>种下你的第一片果园</span><small>THE GROVE</small></div><div class="zone staging-zone"><span>待打出的牌</span><small>拖入果园，自由叠放</small></div><div class="zone dice-zone"><span>收获骰子</span><small>FRUIT RESERVE</small></div><div id="objects"></div></div>
         <div class="table-bottom"><div class="gesture-hint"><kbd>拖动</kbd> 移动物件 <span>·</span> <kbd>F</kbd> 翻面 <span>·</span> <kbd>中键</kbd> 旋转</div><div class="view-tools"><button data-action="sound" title="切换音效" id="sound-button">♪</button><button data-action="grid" title="切换网格" id="grid-button">▦</button><i></i><button data-action="zoom-out" title="缩小">−</button><span id="zoom-label">100%</span><button data-action="zoom-in" title="放大">＋</button><button data-action="fit" title="适应桌面">⌗</button></div></div>

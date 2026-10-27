@@ -34,6 +34,18 @@ export function assetFor(state,id){return [...builtinAssets,...state.assets].fin
 export function nextZ(state){return Math.max(1,...state.objects.map(o=>o.z))+1;}
 export function dimensions(state,o){if(o.type==='card') {const a=assetFor(state,o.assetId);return {w:o.width||a?.width||CARD_W,h:o.height||a?.height||CARD_H};}if(o.type==='deck')return {w:CARD_W,h:CARD_H};if(o.type==='board')return {w:o.width||640,h:o.height||440};if(o.type==='die')return {w:50,h:50};return {w:58,h:58};}
 export function pointOnObject(state,o,x,y){const a=-o.rotation*Math.PI/180,dx=x-o.x,dy=y-o.y;const px=dx*Math.cos(a)-dy*Math.sin(a),py=dx*Math.sin(a)+dy*Math.cos(a);const {w,h}=dimensions(state,o);return {inside:Math.abs(px)<=w/2&&Math.abs(py)<=h/2,px,py,w,h};}
+export function objectsInRect(state,rect){
+  const cx=(rect.left+rect.right)/2,cy=(rect.top+rect.bottom)/2,hw=(rect.right-rect.left)/2,hh=(rect.bottom-rect.top)/2;
+  return state.objects.filter(o=>{
+    // The board is the surface underneath the pieces; select it explicitly.
+    if(o.locked||o.type==='board')return false;
+    const {w,h}=dimensions(state,o),angle=o.rotation*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),dx=o.x-cx,dy=o.y-cy;
+    return Math.abs(dx)<=hw+Math.abs(c)*w/2+Math.abs(s)*h/2&&
+      Math.abs(dy)<=hh+Math.abs(s)*w/2+Math.abs(c)*h/2&&
+      Math.abs(dx*c+dy*s)<=w/2+hw*Math.abs(c)+hh*Math.abs(s)&&
+      Math.abs(-dx*s+dy*c)<=h/2+hw*Math.abs(s)+hh*Math.abs(c);
+  });
+}
 export function treeAt(state,x,y){
   const cards=state.objects.filter(o=>o.type==='card').sort((a,b)=>b.z-a.z);
   for(const card of cards){const p=pointOnObject(state,card,x,y);if(p.inside){const col=Math.min(1,Math.floor((p.px+p.w/2)/(p.w/2))),row=Math.min(2,Math.floor((p.py+p.h/2)/(p.h/3)));return {card,tree:card.faceUp?assetFor(state,card.assetId)?.cells?.[row*2+col]??null:null,index:row*2+col};}}

@@ -48,6 +48,8 @@
 .setup-drawer.drawer.open{transform:translateX(0)}
 .setup-drawer h2 small{font-size:11px;font-weight:400;color:#91a17e;letter-spacing:0}
 .editor-dock [data-drawer="setup"] small{white-space:nowrap;letter-spacing:0}
+#selection-marquee{position:absolute;z-index:2000010;pointer-events:none;border:1px solid #e9edb99c;background:#dbe9b31c;border-radius:2px}
+#selection-marquee[hidden]{display:none}
 .setup-intro{font-size:16px;color:#405335;margin:0 0 10px}
 #setup-status{font-size:11px;color:#70845e;line-height:1.6;margin:0 0 16px}
 .setup-tools,.setup-buttons{display:flex;gap:8px;align-items:center}
