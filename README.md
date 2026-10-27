@@ -139,3 +139,5 @@ npm run build # 生成可部署到任意静态服务器的 dist/
 **规则执行范围：**这是带冒险辅助的自由桌面。战斗掷骰和伤害、敌人能力、装备槽位与负重、商人交易、消耗品、技能特殊效果、剧情选项、祝福奖励、首领选择和最终胜负/计分由玩家按牌面结算。归档敌人表示玩家已完成战斗；不会自动发放战利品。直接使用通用桌面操作修改/合并专用牌堆会改变其结构；误操作可撤销。
 
 地图选择第一面，另一面可翻看。未复制含所有 DLC 的整本排版 PDF。完整原版规则与附录保存在 `public/assets/iron-helm/`，来源为 [Grey Gnome Games 官方规则](https://greygnome.com/wp-content/uploads/2018/11/iron-helm-rules.pdf) 与 [官方附录](https://greygnome.com/wp-content/uploads/2018/11/iron-helm-appendix.pdf)，可从游戏规则弹窗离线打开。游戏 © 2019 Jason Glover / Grey Gnome Games，美术 Jason Glover & Daniel F. Walthall；中文素材标注为假装不在意汉化、老方分享。
+
+游玩模式右下角常驻「回到初始视野」，按已保存的开局布局恢复缩放与居中；只调整视角，不移动物件或重开牌局。编辑模式的「适应桌面」仍按当前物件分布计算。

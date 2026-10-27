@@ -63,3 +63,8 @@
 #setup-guide summary{cursor:pointer;color:#4b643b}#setup-assets{max-height:200px;overflow:auto}#setup-assets code{color:#405c36}
 .setup-scroll>.text-button{font-size:10px;line-height:1.7;padding:10px 0}
 @media(max-width:760px){.setup-drawer.drawer{left:76px;width:500px;max-width:calc(100vw - 88px)}.setup-tools{flex-wrap:wrap}#setup-source{font-size:11px;min-height:240px}}
+
+#play-reset-view{position:absolute;right:22px;bottom:22px;z-index:30;display:none;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:10px 15px;border:1px solid #c6d6b85c;border-radius:9px;background:#284733ed;color:#e7eddc;font-size:12px;box-shadow:0 3px 12px #122a1c24}
+#play-reset-view:hover{background:#3a5940;color:#fff9e6;border-color:#c6d6b89c}
+#app[data-mode="play"] #play-reset-view{display:flex}
+@media(max-width:760px){#play-reset-view{right:12px;bottom:12px;min-height:40px;padding:9px 12px}}
