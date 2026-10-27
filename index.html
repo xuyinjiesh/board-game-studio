@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#334c3d"><title>桌间 Tablecraft · 桌游工坊</title><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23334c3d'/%3E%3Cpath d='M16 24 32 15 48 24v20l-16 9-16-9Z' fill='none' stroke='%23e7c489' stroke-width='4'/%3E%3Cpath d='m16 24 16 9 16-9M32 33v20' fill='none' stroke='%23e7c489' stroke-width='4'/%3E%3C/svg%3E"><link rel="stylesheet" href="/src/style.css"></head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="桌间桌游工坊"><span class="brand-mark">⬡</span><strong>桌间<span>TABLECRAFT</span></strong><i></i><span class="brand-sub">桌游工坊</span></a>
+    <div class="project-name"><span class="status-dot"></span><span>果丛 · 我的桌面</span><span class="local-badge">本地</span></div>
+    <div class="header-actions"><span id="save-status">已自动保存</span><button data-action="export" class="quiet">导出桌面 <span>↗</span></button><button data-action="help" class="icon-button" title="操作指南">?</button></div>
+  </header>
+  <div class="workspace">
+    <aside class="library">
+      <div class="section-eyebrow">YOUR WORKSHOP <span>01</span></div>
+      <h1>让桌游，<br>在这里发生<span>。</span></h1>
+      <div class="mode-switch" aria-label="工作模式"><button data-mode="play" class="active">◉ 游玩</button><button data-mode="edit">◇ 编辑</button></div>
+      <div class="library-heading"><h2>资产库</h2><span id="asset-total">18 张卡牌</span></div>
+      <div class="asset-tabs" role="tablist"><button data-tab="cards" class="active" role="tab">卡牌</button><button data-tab="dice" role="tab">骰子</button><button data-tab="tokens" role="tab">标记</button><button data-tab="boards" role="tab">版图</button></div>
+      <div id="asset-library" class="asset-library"></div>
+      <div class="library-bottom"><button class="text-button hidden" data-action="blank-table">新建空白桌面 <span>＋</span></button><button class="import-button" data-action="import-assets"><span>＋</span> 导入图片资产</button><button class="text-button" data-action="import-session">打开桌面存档 <span>↗</span></button><p>灵感落在桌上，游戏由你定义。</p></div>
+    </aside>
+    <main class="main-area">
+      <div class="table-toolbar"><div><span class="tiny-label">正在游玩</span><h2>果丛 <span>GROVE</span><span class="game-tag">单人 · 10 分钟</span></h2></div><div class="toolbar-actions"><button data-action="undo" class="icon-button" title="撤销 Ctrl+Z">↶</button><button data-action="redo" class="icon-button" title="重做 Ctrl+Shift+Z">↷</button><span class="divider"></span><button data-action="rules" class="quiet">▤ 规则</button><button data-action="new-game" class="new-game">↻ 新一局</button></div></div>
+      <div class="table-viewport" id="viewport" tabindex="0" aria-label="桌游桌面，拖动空白处移动视角，滚轮缩放">
+        <div class="table-atmosphere"></div>
+        <div class="table-info"><span class="live-dot"></span><span id="table-mode-label">自由操作桌面</span><span class="info-separator">/</span><span id="table-item-count"></span></div>
+        <div class="scene" id="scene"><div class="surface"></div><div class="grid-overlay" id="grid"></div><div class="zone deck-zone"><span>抽牌区</span><small>DRAW PILE</small></div><div class="zone orchard-zone"><span>种下你的第一片果园</span><small>THE GROVE</small></div><div class="zone staging-zone"><span>待打出的牌</span><small>拖入果园，自由叠放</small></div><div class="zone dice-zone"><span>收获骰子</span><small>FRUIT RESERVE</small></div><div id="objects"></div></div>
+        <div class="table-empty-note">GROVE <span>by Mark Tuck</span></div>
+        <div class="selection-toolbar hidden" id="selection-toolbar"></div>
+        <div class="table-bottom"><div class="gesture-hint"><kbd>拖动</kbd> 移动物件 <span>·</span> <kbd>F</kbd> 翻面 <span>·</span> <kbd>R</kbd> 旋转</div><div class="view-tools"><button data-action="sound" title="切换音效" id="sound-button">♪</button><button data-action="grid" title="切换网格" id="grid-button">▦</button><i></i><button data-action="zoom-out" title="缩小">−</button><span id="zoom-label">100%</span><button data-action="zoom-in" title="放大">＋</button><button data-action="fit" title="适应桌面">⌗</button></div></div>
+      </div>
+      <footer class="workspace-footer"><span><i></i> 所有改变，都留在这张桌上</span><span>本地自动保存 <span class="footer-dot">·</span> <button data-action="help">快捷键 ↗</button></span></footer>
+    </main>
+    <aside class="inspector"><div class="inspector-top"><span class="section-eyebrow">ON THE TABLE</span><span>✧</span></div><div id="inspector-content"></div><div class="inspector-bottom"><div class="small-mark">✳</div><p>一张桌子，无限种玩法。<br><span>慢慢来，下一手会更好。</span></p></div></aside>
+  </div>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<dialog id="modal"><button class="modal-close icon-button" data-action="close-modal" aria-label="关闭">×</button><div id="modal-content"></div></dialog>
+<input type="file" id="asset-input" accept="image/png,image/jpeg,image/webp" multiple hidden><input type="file" id="session-input" accept="application/json,.json" hidden>
+<script type="module" src="/src/app.js"></script>
+</body></html>
