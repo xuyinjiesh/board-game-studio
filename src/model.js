@@ -123,7 +123,7 @@ export function mergeCards(state,ids,{targetId}={}){
 }
 export function validateSession(raw){
   if(!raw||raw.version!==VERSION||!Array.isArray(raw.objects)||!Array.isArray(raw.assets)||!raw.settings)throw new Error('不是支持的桌面存档');
-  if(raw.objects.length>1000||raw.assets.length>300)throw new Error('存档过大（最多 1000 个物件）');
+  if(raw.objects.length>1000||raw.assets.length>1000)throw new Error('存档过大（最多 1000 个物件和 1000 份资产）');
   const assets=new Map();
   const safeImage=s=>typeof s==='string'&&s.length<12000000&&(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(s)||/^\/assets\/[A-Za-z0-9/_-]+\.(webp|png|jpg|jpeg)$/.test(s));
   const finite=(v,min,max)=>typeof v==='number'&&Number.isFinite(v)&&v>=min&&v<=max;
@@ -174,7 +174,7 @@ export function validateSession(raw){
   if(raw.setup!==undefined)result.setup=validateSetup(raw.setup,raw);
   if(raw.initialSetup!==undefined)result.initialSetup=validateSetup(raw.initialSetup,raw);
   if(raw.setupProfiles!==undefined){
-    if(!Array.isArray(raw.setupProfiles)||!raw.setupProfiles.length||raw.setupProfiles.length>20)throw new Error('最多保存 20 个角色开局方案');
+    if(!Array.isArray(raw.setupProfiles)||!raw.setupProfiles.length||raw.setupProfiles.length>64)throw new Error('最多保存 64 个角色开局方案');
     const profileIds=new Set();
     result.setupProfiles=raw.setupProfiles.map(p=>{
       if(!p||typeof p.id!=='string'||!p.id||p.id.length>100||profileIds.has(p.id)||typeof p.name!=='string'||!p.name.trim()||p.name.length>100)throw new Error('角色开局方案无效');

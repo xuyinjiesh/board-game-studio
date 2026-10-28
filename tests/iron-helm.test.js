@@ -120,7 +120,7 @@ test('legacy iron helm saves gain the mat once without losing cards, counters or
 });
 
 test('manual contains brief rules and bilingual references with no adventure assistant',()=>{
-  const s=createIronHelmSession();assert.match(toolbar(s),/铁盔/);assert.match(toolbar(s),/规则手册/);
+  const s=createIronHelmSession();assert.doesNotMatch(toolbar(s),/ih-title/);assert.match(toolbar(s),/aria-label="规则手册"/);
   assert.equal((toolbar(s).match(/<button/g)||[]).length,1);assert.doesNotMatch(toolbar(s),/冒险助手|adventure|抽两张门|ih-vitals|第.*层/);
   const manual=journal(s);
   assert.match(manual,/规则书索引/);assert.match(manual,/hreflang="zh-CN"/);assert.match(manual,/hreflang="en"/);

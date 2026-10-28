@@ -38,12 +38,12 @@
     <aside class="object-drawer drawer" id="object-drawer" aria-label="物件属性" aria-hidden="true" inert><div class="drawer-heading"><h2>物件属性</h2><button data-action="close-object" class="drawer-close" aria-label="关闭物件属性">×</button></div><div id="inspector-content" class="drawer-scroll"></div></aside>  </div>
   <nav class="editor-dock" aria-label="编辑工具"><button data-action="manage-profiles" title="角色开局方案"><span>♧</span><small>开局方案</small></button><button data-drawer="assets" aria-controls="assets-drawer" aria-expanded="false" title="资产库"><span>▦</span><small>资产</small></button><button data-drawer="settings" aria-controls="settings-drawer" aria-expanded="false" title="桌面设置"><span>☷</span><small>桌面</small></button></nav>
   <div class="play-actions" role="group" aria-label="游玩操作">
-  <button id="play-help" data-action="help" title="操作与快捷键" aria-label="查看和设置快捷键">?</button>
-  <button id="mode-toggle" data-mode="edit" title="编辑桌面 · Ctrl+E" aria-label="进入编辑模式 Ctrl+E"><span>◇</span> 编辑桌面 <kbd>Ctrl E</kbd></button>
-  <button id="play-new-game" data-action="new-game" title="开始新一局">↻ 新一局</button>
+  <button id="play-help" data-action="help" title="操作与快捷键" aria-label="查看和设置快捷键"><svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4.3 1.7c-1.2.7-1.8 1.2-1.8 2.8M12 17h.01"/></svg></button>
+  <button id="mode-toggle" data-mode="edit" title="编辑桌面 · Ctrl+E" aria-label="进入编辑模式 Ctrl+E"><svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15Z"/></svg></button>
+  <button id="play-new-game" data-action="new-game" title="开始新一局" aria-label="开始新一局"><svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v5h5M4.5 10a8 8 0 1 1 .5 6"/></svg></button>
   </div>
-  <button id="play-plaza" data-action="plaza" aria-label="返回作品广场">‹ 作品广场</button>
-  <button id="play-reset-view" data-action="reset-view" title="恢复开局时的缩放与位置" aria-label="回到初始视野">⌖ 回到初始视野</button>
+  <button id="play-plaza" data-action="plaza" title="返回作品广场" aria-label="返回作品广场"><svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18"/></svg></button>
+  <button id="play-reset-view" data-action="reset-view" title="恢复开局时的缩放与位置" aria-label="回到初始视野"><svg class="control-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg></button>
 </div>
 
 <div id="toast" role="status" aria-live="polite"></div>

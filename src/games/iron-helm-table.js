@@ -75,7 +75,8 @@ function addDoorPiles(s){
 export function arrangeIronHelmTable(s){
   if(!boardFor(s))s.objects.unshift({...baseObject('board',1000,2000*320/780/2,0),assetId:'ih-playmat',width:2000,height:2000*320/780,locked:true});
   for(const o of s.objects){
-    const slot=o.ihRole==='inventory'?equipmentSlot((o.assetId||o.cards?.at(-1)||'').split('-').at(-1)):slots[o.ihRole];
+    const asset=s.assets.find(a=>a.id===(o.assetId||o.cards?.at(-1)));
+    const slot=o.ihRole==='inventory'?(asset?.slot?({main:[1180,330],off:[1470,330],head:[1325,150],body:[1325,330],accessory:[1180,515]})[asset.slot]:equipmentSlot((o.assetId||o.cards?.at(-1)||'').split('-').at(-1))):slots[o.ihRole];
     if(slot){Object.assign(o,matPoint(s,...slot));if(['card','deck'].includes(o.type)&&o.ihRole!=='blessing'){o.width=140;o.height=196;}}
     if(o.type==='token'&&o.kind?.startsWith('ih-')){
       const key=o.kind.slice(3);o.assetId=`ih-marker-${key}`;o.color=markerColors[key]||o.color;o.width=o.height=tracks[key]?28:48;

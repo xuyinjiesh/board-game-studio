@@ -19,7 +19,7 @@ const STORAGE='tablecraft.workspace.v1',RECOVERY='tablecraft.recovery.v2';
 let state=createSession(),storageFailed=false,workspaceLoaded=false,plaza,savedFingerprint='';
 let selected=new Set(),history=[],future=[],tab='cards',zoom=1,pan={x:0,y:0},drag=null,saveTimer,toastTimer,spaceDown=false,importPurpose='new',pendingImages=[],rolling=new Set();
 let metaEditing=null,pendingExport=null,exportReplacementId;
-let pickingDrawTarget=null,deckMenuId=null;
+let pickingDrawTarget=null,deckMenuId=null,openingDraft=null;
 const currentDeckScope=()=>deckMenuId&&primary()?.id===deckMenuId?'pile':'top';
 function closeDeckMenu(){deckMenuId=null;$('#deck-draw-tools').hidden=true;}
 function beginDeckMenuPress(pending,deck){
@@ -94,6 +94,7 @@ function syncObjects(){
       node.dataset.signature=signature;
     }
     const {w,h}=dimensions(state,o);
+    node.dataset.gameRole=o.ihRole||'';
     node.className=`table-object ${o.type} ${o.type==='deal'&&o.layout==='deck'?'deck generated-pile':''} ${o.fixedPosition?'fixed-position':''} ${sharedToken(o.kind)?'shared-token':''} ${o.type==='token'&&o.kind?.startsWith('ih-')?'ih-square-marker':''} ${o.faceUp===false?'face-down':''} ${selected.has(o.id)?'selected':''} ${o.locked?'locked':''} ${drag?.ids?.includes(o.id)?'dragging':''} ${rolling.has(o.id)?'rolling':''}`;
     node.style.cssText=`--x:${o.x}px;--y:${o.y}px;--angle:${o.rotation}deg;--w:${w}px;--h:${h}px;--object-color:${COLORS[o.color]||(/^#[0-9a-f]{6}$/i.test(o.color)?o.color:'#b86231')};z-index:${objectLayer(o)};`;
     if(o.type==='die')updateDie(node,o);
@@ -124,7 +125,6 @@ function render(){
   const profile=state.setupProfiles?.find(p=>p.id===state.activeSetupProfileId);$('#active-profile-name').textContent=profile?.name||'';$('#active-profile-name').hidden=!profile;
   $('.table-toolbar .tiny-label').textContent=state.mode==='edit'?'正在编辑':'正在游玩';
   $('.table-toolbar h2').textContent=state.name;
-  $$('[data-action="new-game"]').forEach(button=>button.textContent='↻ 新一局');
   $('[data-action="blank-table"]').classList.toggle('hidden',state.mode!=='edit');
   scene.classList.toggle('blank-table',!game()?.zones?.length);
   scene.dataset.game=state.gameId;
@@ -215,11 +215,22 @@ function editProfile(id){
   try{const draft=switchSetupProfile(state,id);$('#modal').close();mutate(()=>{state=draft;selected.clear();});fit();notify(`正在编辑：${state.setupProfiles.find(p=>p.id===id).name}`);}catch(error){notify(error.message);}
 }
 function chooseOpening(){
+  openingDraft=null;
+  if(game()?.expansionChoiceHTML){openModal(game().expansionChoiceHTML(saveEditorDraft(state)),true);$('#modal').dataset.kind='expansion-choice';syncExpansionChoices();return;}
   openModal(`<h2>选择角色开局</h2><p class="modal-lead">加载所选方案，再独立洗牌、发初始牌。当前进度可撤销恢复。</p>${openingChoicesHTML(saveEditorDraft(state))}`,state.gameId==='iron-helm');
   $('#modal').dataset.kind='opening-choice';
 }
+function syncExpansionChoices(){
+  const selected=new Set($$('[data-ih-expansion]:checked').map(el=>el.dataset.ihExpansion));
+  for(const id of ['ih-adventure','ih-dungeon']){
+    const select=$('#'+id);if(!select)continue;
+    for(const option of select.options)option.disabled=option.value!=='base'&&!selected.has(option.value);
+    if(select.selectedOptions[0]?.disabled)select.value='base';
+  }
+}
+
 function beginOpening(id){
-  try{const next=startOpening(state,id);$('#modal').close();activeDrawer=null;mutate(()=>{state=next;selected.clear();},{audio:'shuffle'});fit();}catch(error){notify(error.message);}
+  try{const next=startOpening(openingDraft||state,id);openingDraft=null;$('#modal').close();activeDrawer=null;mutate(()=>{state=next;selected.clear();},{audio:'shuffle'});fit();}catch(error){notify(error.message);}
 }
 function updateOpening(input){
   const key=input.dataset.opening,items=selection().filter(o=>key==='setupOrder'?o.type==='deck':key==='value'?o.type==='token':key==='faceUp'?['card','deck','token'].includes(o.type):['card','deck','token','die'].includes(o.type));
@@ -325,7 +336,7 @@ function gameError(error){
 }
 
 function renderShortcutHints(){
-  const mode=$('#mode-toggle');mode.querySelector('kbd').textContent=shortcuts.mode;
+  const mode=$('#mode-toggle');
   mode.title='编辑桌面 · '+shortcuts.mode;mode.setAttribute('aria-label',mode.title);
   $('.play-button').title='进入游玩模式 · '+shortcuts.mode;
   for(const [action,id] of [['undo','undo'],['redo','redo'],['save-draft','save'],['fit','fit']]){
@@ -387,6 +398,16 @@ actions['make-fixed-pile']=()=>{const o=primary();if(state.mode!=='edit'||o?.typ
 
 actions['add-profile']=()=>{const next=addSetupProfile(state,$('#profile-name').value);$('#modal').close();mutate(()=>{state=next;selected.clear();});fit();notify('角色方案已创建，直接在桌面上调整装备和数值');};
 actions['save-profile-options']=()=>{const next=updateSetupProfile(state,{name:$('#profile-name').value,coverAssetId:$('#profile-cover').value==='auto'?undefined:$('#profile-cover').value,description:$('#profile-description').value});mutate(()=>state=next);manageProfiles();notify('开局选项已保存，游玩时同步显示');};
+actions['ih-clear-expansions']=()=>{$$('[data-ih-expansion]').forEach(el=>el.checked=false);syncExpansionChoices();};
+actions['ih-all-expansions']=()=>{$$('[data-ih-expansion]').forEach(el=>el.checked=true);syncExpansionChoices();};
+actions['ih-choose-roles']=()=>{
+  try{
+    const options={packs:$$('[data-ih-expansion]:checked').map(el=>el.dataset.ihExpansion),adventure:$('#ih-adventure').value,dungeon:$('#ih-dungeon').value};
+    openingDraft=game().configureOpening(saveEditorDraft(state),options);
+    openModal(`<h2>选择角色开局</h2><p class="modal-lead">${options.packs.length?`已选择 ${options.packs.length} 个扩展`:'仅基础版'} · 点击角色开始新一局。${options.packs.includes('iron-chest')?'铁窖的种族 / 职业卡保留在扩展区供自由组合。':''}</p>${openingChoicesHTML(openingDraft)}<button class="full-width quiet" data-action="new-game">返回扩展选择</button>`,true);
+    $('#modal').dataset.kind='opening-choice';
+  }catch(error){notify(error.message);}
+};
 actions['preview-opening']=()=>{actions['save-profile-options']();chooseOpening();};
 actions['remove-profile']=()=>{const next=removeSetupProfile(state);$('#modal').close();mutate(()=>{state=next;selected.clear();});fit();notify('已移除方案，可撤销恢复');};
 actions['pick-draw-target']=()=>{const o=primary();if(state.mode!=='edit'||!(o?.type==='deck'||o?.type==='deal'&&o.layout==='deck'))return;pickingDrawTarget=o.id;viewport.classList.add('picking-draw-target');setDrawer(null);notify('点击桌面指定发牌位置，Esc 取消');};
@@ -415,7 +436,7 @@ document.addEventListener('click',e=>{
   else if(b.dataset.dieValue)setDiceValue(Number(b.dataset.dieValue));
 });
 document.addEventListener('change',e=>{
-  const el=e.target;if(el.dataset.setting){mutate(()=>state.settings[el.dataset.setting]=el.type==='checkbox'?el.checked:Number(el.value));}
+  const el=e.target;if(el.hasAttribute('data-ih-expansion')){syncExpansionChoices();return;}if(el.dataset.setting){mutate(()=>state.settings[el.dataset.setting]=el.type==='checkbox'?el.checked:Number(el.value));}
   if(el.dataset.meta==='name'&&!el.value.trim()){el.value=state.name;notify('游戏名称不能为空');}
   if(el.hasAttribute('data-draw-mode')){
     const o=primary(),mode=el.value;cancelDrawTarget();if(state.mode!=='edit'||!o)return;

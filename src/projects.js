@@ -22,7 +22,7 @@ export function migrateSession(raw){
   session.initialSetup||=gameFor(session.gameId)?.create(()=>.5).initialSetup||captureSetup(session);
   const provider=gameFor(session.gameId);
   if(!session.setupProfiles&&provider?.openingProfiles){
-    session.setupProfiles=provider.openingProfiles();
+    session.setupProfiles=provider.openingProfiles(session);
     session.activeSetupProfileId=provider.openingProfileId(session);
     const active=session.setupProfiles.find(p=>p.id===session.activeSetupProfileId);
     if(active)active.setup=structuredClone(session.setup||session.initialSetup);
@@ -77,7 +77,7 @@ export function addSetupProfile(session,name){
   if(typeof name!=='string'||!name.trim()||name.length>100)throw new Error('请填写 1–100 字的角色方案名称');
   const draft=saveEditorDraft(session);
   if(!draft.setupProfiles){const id=uid();draft.setupProfiles=[{id,name:'默认开局',setup:structuredClone(draft.setup||draft.initialSetup)}];draft.activeSetupProfileId=id;}
-  if(draft.setupProfiles.length>=20)throw new Error('最多保存 20 个角色开局方案');
+  if(draft.setupProfiles.length>=64)throw new Error('最多保存 64 个角色开局方案');
   if(draft.setupProfiles.some(p=>p.name===name.trim()))throw new Error('这个角色方案名称已存在');
   const active=draft.setupProfiles.find(p=>p.id===draft.activeSetupProfileId);
   const profile={...structuredClone(active),id:uid(),name:name.trim(),setup:{...structuredClone(draft.setup||draft.initialSetup),name:name.trim()}};

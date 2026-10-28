@@ -4,14 +4,16 @@
 .main-area{position:absolute;inset:0;display:block;min-width:0;padding:0;background:transparent}
 .table-viewport{position:absolute;inset:0;width:100%;height:100%;min-height:0;flex:none;border:0;border-radius:0;outline:0;box-shadow:inset 0 0 180px #101e1b40}
 .table-viewport:after{display:none}
-/* The Iron Helm header has its own space, outside the pannable playmat. */
-#app[data-game="iron-helm"] .table-viewport{top:76px;height:calc(100% - 76px)}
-#app[data-game="iron-helm"][data-mode="edit"] .table-viewport{top:150px;height:calc(100% - 150px)}
-#app[data-game="iron-helm"][data-mode="play"] #game-controls{top:20px;max-width:calc(100% - 440px)}
+/* Iron Helm shares one continuous tabletop behind its floating controls. */
+#app[data-game="iron-helm"] #game-controls{left:auto;right:22px;top:100px;transform:none;max-width:none}
+#app[data-game="iron-helm"][data-mode="play"] #game-controls{top:20px;right:178px}
+#app[data-game="iron-helm"] .ih-toolbar{padding:0;border:0;background:transparent;box-shadow:none;backdrop-filter:none}
+#app[data-game="iron-helm"] .ih-toolbar button{display:grid;place-items:center;width:42px;height:42px;padding:0;border:1px solid #c6d6b85c;border-radius:9px;background:#284733ed;color:#e7eddc;box-shadow:0 3px 12px #122a1c24}
+#app[data-game="iron-helm"] .ih-toolbar button:hover{background:#3a5940;color:#fff9e6;border-color:#c6d6b89c}
 @media(max-width:760px){
-  #app[data-game="iron-helm"][data-mode="play"] .table-viewport{top:112px;height:calc(100% - 112px)}
-  #app[data-game="iron-helm"][data-mode="play"] #game-controls{top:64px;max-width:calc(100% - 24px)}
-  #app[data-game="iron-helm"][data-mode="edit"] .table-viewport{top:134px;height:calc(100% - 134px)}
+  #app[data-game="iron-helm"] #game-controls{top:86px;right:12px}
+  #app[data-game="iron-helm"][data-mode="play"] #game-controls{top:12px;right:150px}
+  #app[data-game="iron-helm"] .ih-toolbar button{width:40px;height:40px}
 }
 .table-atmosphere{opacity:.35}
 .topbar{position:absolute;inset:20px 24px auto;height:62px;padding:0 18px;z-index:30;border:1px solid #e9ebdd99;border-radius:13px;background:#f8f8ef;box-shadow:0 6px 28px #10251d26;backdrop-filter:none;gap:24px}
@@ -70,7 +72,7 @@
 /* Shared play controls, independent of the active game. */
 .play-actions{position:absolute;top:20px;right:22px;z-index:30;display:none;align-items:center;gap:10px}
 #app[data-mode="play"] .play-actions{display:flex}
-.play-actions #mode-toggle,.play-actions #play-new-game,.play-actions #play-help{position:static;display:flex;align-items:center;justify-content:center;gap:8px;height:42px;min-width:42px;width:auto;margin:0;padding:10px 14px;border:1px solid #c6d6b85c;border-radius:9px;background:#284733ed;color:#e7eddc;font-size:12px;box-shadow:0 3px 12px #122a1c24;opacity:1;white-space:nowrap}
+.play-actions #mode-toggle,.play-actions #play-new-game,.play-actions #play-help{position:static;display:flex;align-items:center;justify-content:center;height:42px;min-width:42px;width:42px;margin:0;padding:0;border:1px solid #c6d6b85c;border-radius:9px;background:#284733ed;color:#e7eddc;font-size:12px;box-shadow:0 3px 12px #122a1c24;opacity:1;white-space:nowrap}
 .play-actions #play-help{width:42px;padding:0;font-size:19px}
 .play-actions button:hover,.play-actions button:focus-visible{background:#3a5940!important;border-color:#c6d6b89c!important}
 #app[data-mode="play"] #game-controls{top:76px;max-width:calc(100% - 44px)}
@@ -79,9 +81,13 @@
 .shortcut-settings input{width:148px;min-width:0;padding:9px;border:1px solid #c6d3b9;border-radius:6px;background:#fffef8;color:#405335;text-align:center;cursor:pointer;font:12px ui-monospace,monospace}
 .shortcut-settings input:focus{outline:2px solid #76975b;outline-offset:2px}
 #shortcut-feedback{min-height:20px;font-size:12px;color:#647b4d}
-@media(max-width:760px){.play-actions{top:12px;right:12px;gap:6px}.play-actions #mode-toggle,.play-actions #play-new-game,.play-actions #play-help{height:40px;padding:9px 10px;font-size:11px}.play-actions #play-help{width:36px;min-width:36px;padding:0;font-size:18px}#app[data-mode="play"] #game-controls{top:64px;max-width:calc(100% - 24px)}}
+@media(max-width:760px){.play-actions{top:12px;right:12px;gap:6px}.play-actions #mode-toggle,.play-actions #play-new-game,.play-actions #play-help{height:40px;min-width:40px;width:40px;padding:0}#app[data-mode="play"] #game-controls{top:64px;max-width:calc(100% - 24px)}}
 @media(max-width:420px){.play-actions #mode-toggle kbd{display:none}#play-plaza{padding:12px 10px}.shortcut-settings label{gap:8px}.shortcut-settings input{width:125px}}
 
 #draw-target{position:absolute;left:var(--x);top:var(--y);width:var(--w);height:var(--h);transform:translate(-50%,-50%) rotate(var(--angle));z-index:2000005;border:2px dashed #efd79c;border-radius:10px;background:#d8c18a20;color:#fff0c7;display:grid;place-items:center;cursor:move;touch-action:none}
 #draw-target[hidden]{display:none}#draw-target span{padding:8px 12px;background:#263d30ed;border-radius:6px;font-size:14px;pointer-events:none}#draw-target:focus-visible{outline:3px solid #fff2bc;outline-offset:4px}
 .picking-draw-target,.picking-draw-target .table-object{cursor:crosshair!important}
+
+.control-icon{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;flex-shrink:0}
+#play-plaza,#play-reset-view{width:42px;height:42px;min-height:42px;padding:0;align-items:center;justify-content:center}
+@media(max-width:760px){#play-plaza,#play-reset-view{width:40px;height:40px;min-height:40px;padding:0}}
