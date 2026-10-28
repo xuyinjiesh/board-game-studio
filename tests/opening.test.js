@@ -93,7 +93,7 @@ test('Iron Helm exposes four editable role openings with their own starting reso
   for(const [index,health] of [14,12,14,16].entries()){
     const profile=s.setupProfiles[index],played=startOpening(s,profile.id,()=>0);
     assert.equal(played.objects.find(o=>o.kind==='ih-health').value,health);
-    assert.equal(played.objects.find(o=>o.ihRole==='hero').assetId,`ih-hero-${index+1}`);
+    assert.equal(played.objects.find(o=>o.ihRole==='hero').cards.at(-1),`ih-hero-${index+1}`);
     assert.equal(played.activeSetupProfileId,profile.id);
   }
 });

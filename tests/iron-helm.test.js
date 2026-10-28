@@ -22,8 +22,8 @@ test('all four heroes have unique, conserved cards and their own starting resour
   for(const h of HEROES){
     const s=createIronHelmSession(()=>.3,h.id);
     assert.deepEqual(cards(s),all);assert.equal(value(s,'health'),h.health);assert.equal(value(s,'energy'),h.energy);assert.equal(value(s,'gold'),h.gold);assert.equal(value(s,'rations'),h.rations);
-    assert.equal(s.objects.find(o=>o.ihRole==='hero').assetId,`ih-hero-${h.id}`);
-    assert.deepEqual(s.objects.filter(o=>o.ihRole==='inventory').map(o=>o.assetId),h.items.map(n=>`ih-trapping-${n}`));
+    assert.equal(s.objects.find(o=>o.ihRole==='hero').cards.at(-1),`ih-hero-${h.id}`);
+    assert.deepEqual(s.objects.filter(o=>o.ihRole==='inventory').map(o=>o.cards.at(-1)),h.items.map(n=>`ih-trapping-${n}`));
     assert.deepEqual(validateSession(s),s);
   }
 });
@@ -145,10 +145,11 @@ test('returning cards preserves the fixed pile identity and cannot combine two f
 
 test('version-one saves correct only pile placement and keep in-progress cards and setups',()=>{
   const s=createIronHelmSession();explore(s);revealDoor(s,'b');
+  s.objects=s.objects.map(o=>{if(!o.ihSlot?.startsWith('door-'))return o;const {cards,ihSlot,fixedPosition,maxCards,snapCards,...rest}=o;return {...rest,type:'card',assetId:cards[0]};});
   s.ironHelmTableVersion=1;const door=s.objects.find(o=>o.ihRole==='door-first');door.x=1777;door.y=888;
   s.setup=structuredClone(s.initialSetup);
   for(const objects of [s.objects,s.initialSetup.objects,s.setup.objects])for(const o of objects.filter(o=>o.type==='deck')){delete o.fixedPosition;o.x+=10;o.y+=16;o.rotation=15;}
-  const restored=migrateSession(s);assert.equal(restored.ironHelmTableVersion,2);
+  const restored=migrateSession(s);assert.equal(restored.ironHelmTableVersion,5);
   const held=restored.objects.find(o=>o.id===door.id);assert.equal(held.x,1777);assert.equal(held.y,888);assert.equal(held.faceUp,true);
   for(const current of [restored,applySetup(restored),applySetup(restored,restored.initialSetup)]){
     const deck=pile(current,'dungeon');assert.deepEqual({x:deck.x,y:deck.y},matPoint(current,332,518));

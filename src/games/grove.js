@@ -1,4 +1,4 @@
-import {createSession,captureSetup,baseObject,assetFor,pointOnObject,shuffled,DEFAULT_SCATTER} from '../model.js';
+import {createSession,captureSetup,baseObject,createFixedPile,assetFor,pointOnObject,shuffled,DEFAULT_SCATTER} from '../model.js';
 const CARD_W=160,CARD_H=240,CELL=80;
 export const GROVE_FACES=[2,3,4,5,6,10];
 const layouts = {
@@ -17,19 +17,29 @@ export function createGroveSession(random=Math.random){
   objects.push({...baseObject('card',680,380,1),assetId:all[0],faceUp:true,planted:true});
   objects.push({...baseObject('card',590,820,3),assetId:all[1],faceUp:true,rotation:tilt()});
   objects.push({...baseObject('card',815,825,4),assetId:all[2],faceUp:true,rotation:tilt()});
-  objects.push({...baseObject('deck',245,360,2),cards:all.slice(3,9),faceUp:false,name:'本局牌堆',rotation:tilt()});
-  objects.push({...baseObject('deck',245,740,2),cards:all.slice(9),faceUp:false,name:'下一局 · 备用',rotation:tilt(),reserve:true});
+  objects.push({...createFixedPile(245,360),z:2,maxCards:500,cards:all.slice(3,9),faceUp:false,name:'本局牌堆'});
+  objects.push({...createFixedPile(245,740),z:2,maxCards:500,cards:all.slice(9),faceUp:false,name:'下一局 · 备用',reserve:true});
   for(const [c,color] of ['orange','lemon','lime'].entries()) for(let r=0;r<5;r++) objects.push({...baseObject('die',1090+c*78,300+r*82,20+r),color,value:2,faces:[...GROVE_FACES],rotation:tilt()});
   objects.push({...baseObject('token',1110,785,25),kind:'squirrel',color:'#b86231',name:'松鼠',rotation:tilt()});
   objects.push({...baseObject('token',1225,785,26),kind:'wheelbarrow',color:'#7fa75e',name:'独轮车',rotation:tilt()});
-  const state={...createSession('果丛 · 我的桌面'),gameId:'grove',objects,assets:structuredClone(builtinAssets),mode:'play',meta:{description:'叠一片绿意，收一篮阳光。用 18 张双面卡牌，种出一座属于自己的果园。',players:'1 人',duration:'10 分钟',rules:''}};
-  const source={...baseObject('deck',245,1070,2),cards:[...all],faceUp:false,name:'开局牌库 · 18 张',setupKey:'grove-opening-pool',setupOrder:'shuffle',setupHideEmpty:true};
+  const state={...createSession('果丛 · 我的桌面'),gameId:'grove',grovePileVersion:1,objects,assets:structuredClone(builtinAssets),mode:'play',meta:{description:'叠一片绿意，收一篮阳光。用 18 张双面卡牌，种出一座属于自己的果园。',players:'1 人',duration:'10 分钟',rules:''}};
+  const source={...createFixedPile(245,1070),z:2,maxCards:500,cards:[...all],faceUp:false,name:'开局牌库 · 18 张',setupKey:'grove-opening-pool',setupOrder:'shuffle',setupHideEmpty:true};
   const placements=objects.filter(o=>['card','deck'].includes(o.type)).map((o,index)=>{
     const {id,assetId,cards,type,...placement}=o;
     return {...placement,type:'deal',sourceKey:source.setupKey,name:o.type==='deck'?o.name:o.planted?'起始果园':'初始待打牌',count:o.type==='deck'?o.cards.length:1,layout:o.type==='deck'?'deck':'spread',spacing:40,order:index+1,width:160,height:240,setupFace:'fixed'};
   });
   state.initialSetup={...captureSetup(state),name:'果丛 · 随机开局',objects:[(({id,...o})=>o)(source),...placements,...captureSetup(state).objects.filter(o=>!['card','deck'].includes(o.type))]};
   return state;
+}
+export function upgradeGrovePiles(state){
+  if(state.grovePileVersion===1)return;
+  const tables=[state.objects,state.initialSetup?.objects,state.setup?.objects,...(state.setupProfiles||[]).map(p=>p.setup.objects)].filter(Boolean);
+  for(const objects of tables)for(const o of objects){
+    const generated=o.type==='deal'&&o.layout==='deck'&&o.sourceKey==='grove-opening-pool';
+    const builtin=o.type==='deck'&&(o.setupKey==='grove-opening-pool'||['本局牌堆','下一局 · 备用'].includes(o.name)&&o.cards.every(id=>id.startsWith('grove-')));
+    if(generated||builtin){o.fixedPosition??=true;o.snapCards??=true;o.maxCards??=500;}
+  }
+  state.grovePileVersion=1;
 }
 export function treeAt(state,x,y){
   const cards=state.objects.filter(o=>o.type==='card').sort((a,b)=>b.z-a.z);
@@ -45,16 +55,32 @@ export function scoreTable(state){
   return {groups,wheel,penalty,total:Object.values(groups).reduce((a,b)=>a+b,0)+wheel-penalty,count:scored.length};
 }
 export function snapCard(o){const turns=Math.round(o.rotation/90);o.rotation=((turns%4)+4)%4;const horizontal=o.rotation%2===1;o.rotation*=90;o.x=Math.round((o.x-(horizontal?0:40))/80)*80+(horizontal?0:40);o.y=Math.round((o.y-(horizontal?20:60))/80)*80+(horizontal?20:60);return o;}
+export function grovePlacement(state,o){
+  if(state.mode!=='play'||o.type!=='card'||!assetFor(state,o.assetId)?.cells)return null;
+  const cards=state.objects.filter(c=>c.id!==o.id&&c.type==='card'&&assetFor(state,c.assetId)?.cells);
+  const near=cards.filter(c=>{
+    const p=pointOnObject(state,c,o.x,o.y),horizontal=Math.round((o.rotation-c.rotation)/90)%2!==0;
+    return Math.abs(p.px)<p.w/2+(horizontal?CARD_H:CARD_W)/2&&Math.abs(p.py)<p.h/2+(horizontal?CARD_W:CARD_H)/2;
+  }).sort((a,b)=>Math.hypot(a.x-o.x,a.y-o.y)-Math.hypot(b.x-o.x,b.y-o.y));
+  if(!near.length&&!(o.x>390&&o.x<1020&&o.y<690))return null;
+  // Preserve the orchard's lattice even when a saved or edited opening was moved.
+  const anchor=near[0],aligned=anchor?snapCard({...anchor}):null;
+  const dx=anchor?anchor.x-aligned.x:0,dy=anchor?anchor.y-aligned.y:0;
+  const placement=snapCard({...o,x:o.x-dx,y:o.y-dy});
+  placement.x+=dx;placement.y+=dy;
+  return placement;
+}
 function tokenIcon(kind){if(kind==='squirrel')return '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M35 50c-5 5-19 4-22-5-3-7 2-14 7-16-12-2-16-16-8-21 11-7 22 7 16 18 6-5 7-10 10-10l2-7 4 8c11 4 14 16 6 18l-5 1 2 10-12 4Z" fill="currentColor"/><circle cx="43" cy="24" r="2" fill="#a75a30"/><path d="M33 32c-6 8-3 14 3 15" stroke="#a75a30" stroke-width="3" fill="none"/></svg>';if(kind==='wheelbarrow')return '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="m11 22 7 24h32l6-24Z" fill="currentColor"/><path d="m8 16 8 4 5 29M22 48l-2 6" stroke="currentColor" stroke-width="4" fill="none"/><circle cx="45" cy="51" r="7" fill="none" stroke="currentColor" stroke-width="4"/><text x="34" y="40" text-anchor="middle" font-size="19" font-weight="800" fill="#668a45">15</text></svg>';return '<span class="disc-star">✦</span>';}
 export const grove={
   id:'grove',title:'果丛',subtitle:'GROVE',tagline:'九张牌，一座果园。',players:'1 人',duration:'10 分钟',
-  description:'在小小的卡牌之间，种下一座层层交叠的果园。',create:createGroveSession,
+  description:'在小小的卡牌之间，种下一座层层交叠的果园。',create:createGroveSession,prepareSession:upgradeGrovePiles,
   dice:['orange','lemon','lime'].map(color=>({id:'grove-'+color,color,faces:GROVE_FACES,name:({orange:'橘子',lemon:'柠檬',lime:'酸橙'})[color]+'收获骰'})),
   tokens:[{kind:'squirrel',name:'松鼠',color:'#b86231',description:'终局扣 1 分，正交相邻收获骰再各扣 1 分。'},{kind:'wheelbarrow',name:'独轮车',color:'#7fa75e',description:'替换再次收获的 10 点骰子，代表 15 分。'}],
-  tokenIcon,score:scoreTable,snapLabel:'果树格点吸附',grid:{size:80,x:0,y:20},
+  tokenIcon,score:scoreTable,cardPlacement:grovePlacement,snapLabel:'果树格点吸附',grid:{size:80,x:0,y:20},
   zones:[{className:'deck-zone',label:'抽牌区',subtitle:'DRAW PILE'},{className:'orchard-zone',label:'种下你的第一片果园',subtitle:'THE GROVE'},{className:'staging-zone',label:'待打出的牌',subtitle:'拖入果园，自由叠放'},{className:'dice-zone',label:'收获骰子',subtitle:'FRUIT RESERVE'}],
   onDrop(state,o){
-    if(o.type==='card'&&assetFor(state,o.assetId)?.cells&&o.x>390&&o.x<1020&&o.y<690)snapCard(o);
+    const placement=grovePlacement(state,o);
+    if(placement)Object.assign(o,{x:placement.x,y:placement.y,rotation:placement.rotation});
     else if(['die','token'].includes(o.type)&&treeAt(state,o.x,o.y)){
       const target=treeAt(state,o.x,o.y),a=target.card.rotation*Math.PI/180;
       const asset=assetFor(state,target.card.assetId),w=target.card.width||asset.width,h=target.card.height||asset.height;

@@ -79,7 +79,8 @@ export function addSetupProfile(session,name){
   if(!draft.setupProfiles){const id=uid();draft.setupProfiles=[{id,name:'默认开局',setup:structuredClone(draft.setup||draft.initialSetup)}];draft.activeSetupProfileId=id;}
   if(draft.setupProfiles.length>=20)throw new Error('最多保存 20 个角色开局方案');
   if(draft.setupProfiles.some(p=>p.name===name.trim()))throw new Error('这个角色方案名称已存在');
-  const profile={id:uid(),name:name.trim(),setup:{...structuredClone(draft.setup||draft.initialSetup),name:name.trim()}};
+  const active=draft.setupProfiles.find(p=>p.id===draft.activeSetupProfileId);
+  const profile={...structuredClone(active),id:uid(),name:name.trim(),setup:{...structuredClone(draft.setup||draft.initialSetup),name:name.trim()}};
   draft.setupProfiles.push(profile);draft.activeSetupProfileId=profile.id;draft.setup=structuredClone(profile.setup);draft.mode='edit';draft.objects=editorObjects(profile.setup);
   return validateSession(draft);
 }
@@ -95,6 +96,14 @@ export function renameSetupProfile(session,name){
   if(!profile)throw new Error('请先创建角色开局方案');
   if(draft.setupProfiles.some(p=>p.id!==profile.id&&p.name===name.trim()))throw new Error('这个角色方案名称已存在');
   profile.name=name.trim();profile.setup.name=name.trim();draft.setup.name=name.trim();return validateSession(draft);
+}
+export function updateSetupProfile(session,{name,coverAssetId,description}){
+  const draft=renameSetupProfile(session,name),profile=draft.setupProfiles.find(p=>p.id===draft.activeSetupProfileId);
+  if(coverAssetId!==undefined&&coverAssetId!==''&&!draft.assets.some(a=>a.id===coverAssetId&&a.type==='card'))throw new Error('请选择有效的卡牌封面');
+  if(typeof description!=='string'||description.length>300)throw new Error('开局说明最多 300 字');
+  if(coverAssetId===undefined)delete profile.coverAssetId;else profile.coverAssetId=coverAssetId;
+  profile.description=description.trim();
+  return validateSession(draft);
 }
 export function removeSetupProfile(session){
   const draft=saveEditorDraft(session);if(!draft.setupProfiles||draft.setupProfiles.length<2)throw new Error('请至少保留一个开局方案');

@@ -1,6 +1,6 @@
-import {createSession,baseObject,captureSetup,shuffled,nextZ,assetFor} from '../model.js';
+import {deckEntries,replaceDeckEntries,appendDeckEntries,takeDeckCard,setDeckFace,createSession,baseObject,captureSetup,shuffled,nextZ,assetFor,canReceiveCards,mergeCards} from '../model.js';
 import {ironHelmAssets} from './iron-helm-assets.js';
-import {ironHelmTableAssets,markerColors,matPoint,syncMarker,dropMarker,equipmentSlot,arrangeIronHelmTable,upgradeIronHelmTable} from './iron-helm-table.js';
+import {ironHelmTableAssets,markerColors,matPoint,syncMarker,dropMarker,equipmentSlot,equipmentSlotKey,arrangeIronHelmTable,upgradeIronHelmTable} from './iron-helm-table.js';
 
 export const HEROES=[
   {id:'1',name:'法蓬',health:14,energy:11,capacity:10,gold:3,rations:1,items:['8','12'],skill:'7',proficiency:'敏捷'},
@@ -14,7 +14,8 @@ const pile=(s,role)=>s.objects.find(o=>o.type==='deck'&&o.ihRole===role);
 const marker=(s,key)=>s.objects.find(o=>o.type==='token'&&o.kind===`ih-${key}`);
 export const value=(s,key)=>marker(s,key)?.value??0;
 const progress=s=>marker(s,'turn');
-const currentHero=s=>HEROES.find(h=>s.objects.some(o=>o.ihRole==='hero'&&o.assetId===id('hero',h.id)))||HEROES[0];
+const isActiveDoor=o=>/^door-(a|b|first|second)$/.test(o.ihRole||'')&&(o.type==='card'||o.type==='deck'&&o.cards.length>0);
+const currentHero=s=>HEROES.find(h=>s.objects.some(o=>o.ihRole==='hero'&&(o.assetId||o.cards?.at(-1))===id('hero',h.id)))||HEROES[0];
 const limits={health:18,energy:14,gold:999,rations:999,poison:999,morality:5,level:5,turn:8,eyes:30,foe:99};
 export function changeValue(s,key,delta,o=marker(s,key)){
   if(!o)throw new Error('缺少状态标记，可撤销桌面修改或开始新一局');
@@ -49,7 +50,7 @@ export function createIronHelmSession(random=Math.random,heroId='1'){
     objects.push({...baseObject('token',150+i*100,1040,30),kind:`ih-${key}`,name:statNames[key],color:({health:'#ab4d55',energy:'#855487',poison:'#719242',gold:'#b48d3e'})[key]||'#756b5b',value:({health:h.health,energy:h.energy,gold:h.gold,rations:h.rations,level:1})[key]||0,...(key==='turn'?{phase:'ready',potionChoices:h.id==='2'?2:0}:{})});
   }
   for(let i=0;i<3;i++)objects.push({...baseObject('die',1110+i*75,610,35),color:'ivory',name:`战斗骰 ${i+1}`,faces:[1,2,3,4,5,6],value:1});
-  const s={...createSession('铁盔 · 基础版'),gameId:'iron-helm',ironHelmTableVersion:2,assets:structuredClone([...ironHelmAssets,...ironHelmTableAssets]),objects,mode:'play',meta:{description:'独自深入地下城，在每一扇门后做出取舍。仅包含基础版。',players:'1 人',duration:'30–60 分钟',rules:'冒险工具负责抽牌、计数与换层整理。战斗、装备槽位、负重、剧情选项和卡牌特殊效果请按牌面结算；资源可在规则手册中调整。'}};
+  const s={...createSession('铁盔 · 基础版'),gameId:'iron-helm',ironHelmTableVersion:5,assets:structuredClone([...ironHelmAssets,...ironHelmTableAssets]),objects,mode:'play',meta:{description:'独自深入地下城，在每一扇门后做出取舍。仅包含基础版。',players:'1 人',duration:'30–60 分钟',rules:'冒险工具负责抽牌、计数与换层整理。战斗、装备槽位、负重、剧情选项和卡牌特殊效果请按牌面结算；资源可在规则手册中调整。'}};
   arrangeIronHelmTable(s);
   s.settings.theme='night';s.settings.snap=false;
   s.initialSetup={...captureSetup(s),name:`铁盔基础版 · ${h.name}`,shuffleDecks:true};
@@ -62,11 +63,13 @@ function putCard(s,assetId,x,y,role,faceUp=true){
 function takeTop(s,role,x=735,y=530,faceUp=true){
   const d=pile(s,role);if(!d?.cards.length)throw new Error('这个牌堆已空');
   const p=matPoint(s,x,y);
-  return putCard(s,d.cards.pop(),p.x,p.y,role==='blessing'?'blessing-owned':role==='plot'?'plot-active':'drawn',faceUp);
+  return putCard(s,takeDeckCard(d).assetId,p.x,p.y,role==='blessing'?'blessing-owned':role==='plot'?'plot-active':'drawn',faceUp);
 }
 function discard(s,o,role,faceUp=false){
   const d=pile(s,role);if(!d)throw new Error('缺少弃牌区，请恢复初始设置');
-  d.cards.push(o.assetId);d.faceUp=faceUp;s.objects=s.objects.filter(x=>x.id!==o.id);
+  const entries=o.type==='deck'?deckEntries(o):[{assetId:o.assetId}];appendDeckEntries(d,entries.map(card=>({...card,faceUp})));
+  if(o.type==='deck'&&o.ihSlot?.startsWith('door-')){replaceDeckEntries(o,[]);setDeckFace(o,false);o.ihRole='door-slot';}
+  else s.objects=s.objects.filter(x=>x.id!==o.id);
 }
 export function explore(s){
   const p=progress(s);if(!p)throw new Error('缺少回合标记');
@@ -75,23 +78,26 @@ export function explore(s){
   if(value(s,'health')<=0||value(s,'poison')>=value(s,'health'))throw new Error('冒险者已倒下，请开始新一局或撤销上一步');
   if(value(s,'turn')>=8)throw new Error('本层已完成，请进行换层结算');
   if((pile(s,'dungeon')?.cards.length||0)<2)throw new Error('地城牌不足两张，请归还误拿的牌或撤销');
-  const a=takeTop(s,'dungeon',603,518,false),b=takeTop(s,'dungeon',738,518,false);
-  a.ihRole='door-a';b.ihRole='door-b';p.phase='choose';
+  const doors=['a','b'].map(side=>s.objects.find(o=>o.type==='deck'&&o.ihSlot===`door-${side}`));
+  if(doors.some(o=>!o||!canReceiveCards(o,1)||o.cards.length))throw new Error('请先清空并解锁左右门牌位，缺失的牌位可撤销恢复');
+  if(s.objects.some(isActiveDoor))throw new Error('请先归还手动移出的地城牌');
+  for(const [i,o] of doors.entries()){appendDeckEntries(o,[{...takeDeckCard(pile(s,'dungeon')),faceUp:false}]);o.ihRole=`door-${i?'b':'a'}`;}
+  p.phase='choose';
 }
 export function revealDoor(s,side){
   const p=progress(s);if(p?.phase!=='choose')throw new Error('请先抽取两张地城');
-  const first=s.objects.find(o=>o.ihRole===`door-${side}`);if(!first)throw new Error('这张地城已移出桌面');
-  first.faceUp=true;first.ihRole='door-first';p.phase='first';
+  const first=s.objects.find(o=>o.ihRole===`door-${side}`&&isActiveDoor(o));if(!first)throw new Error('这张地城已移出桌面');
+  if(first.type==='deck')setDeckFace(first,true);else first.faceUp=true;first.ihRole='door-first';p.phase='first';
 }
 export function switchDoor(s){
   const p=progress(s);if(p?.phase!=='first')throw new Error('仅在查看第一张门后可以换门');
-  const first=s.objects.find(o=>o.ihRole==='door-first'),second=s.objects.find(o=>['door-a','door-b'].includes(o.ihRole));
+  const first=s.objects.find(o=>o.ihRole==='door-first'&&isActiveDoor(o)),second=s.objects.find(o=>['door-a','door-b'].includes(o.ihRole)&&isActiveDoor(o));
   if(!first||!second)throw new Error('当前地城已被手动移走，请撤销后再试');
-  discard(s,first,'dungeon-discard');second.faceUp=true;second.ihRole='door-second';p.phase='second';
+  discard(s,first,'dungeon-discard');if(second.type==='deck')setDeckFace(second,true);else second.faceUp=true;second.ihRole='door-second';p.phase='second';
 }
 export function finishTurn(s){
   const p=progress(s);if(!['first','second'].includes(p?.phase))throw new Error('请先查看地城并按牌面结算');
-  const doors=s.objects.filter(o=>o.type==='card'&&/^door-/.test(o.ihRole||''));
+  const doors=s.objects.filter(isActiveDoor);
   if(!doors.length)throw new Error('缺少当前地城，请撤销后再试');
   for(const o of doors)discard(s,o,'dungeon-discard');
   changeValue(s,'turn',1);p.phase='ready';
@@ -102,7 +108,7 @@ export function nextLevel(s,random=Math.random){
   const d=pile(s,'dungeon'),discarded=pile(s,'dungeon-discard');
   if(!d||!discarded||d.cards.length+discarded.cards.length!==16)throw new Error('地城牌应为 16 张；请先归还手动抽走的地城牌');
   if(!pile(s,'plot')?.cards.length)throw new Error('剧情牌堆已空，请按首领规则结算');
-  d.cards=shuffled([...d.cards,...discarded.cards],random);discarded.cards=[];
+  replaceDeckEntries(d,shuffled([...deckEntries(d),...deckEntries(discarded)],random).map(card=>({...card,faceUp:false})));replaceDeckEntries(discarded,[]);
   if(value(s,'rations'))changeValue(s,'rations',-1);else changeValue(s,'health',-3);
   changeValue(s,'poison',Math.floor(value(s,'poison')/2));
   progress(s).value=0;
@@ -123,14 +129,16 @@ export function takeFromCatalog(s,assetId){
     const proficiency=Number(a.code)<=4?'心智':Number(a.code)<=8?'敏捷':'力量';
     const price=proficiency===currentHero(s).proficiency?3:5,grave=pile(s,'enemy-discard'),spent=pile(s,'spent');
     if(!grave||!spent||grave.cards.length<price)throw new Error(`需要 ${price} 张未花费的敌人卡`);
-    spent.cards.push(...grave.cards.splice(-price));
+    const entries=deckEntries(grave);appendDeckEntries(spent,entries.splice(-price));replaceDeckEntries(grave,entries);
   }else if(a.group==='potion'){
     if(!p?.potionChoices)throw new Error('这里只用于炼金术的两瓶初始药剂；普通药剂请按牌面抽取');
     p.potionChoices--;
   }else throw new Error('只能在这里购买初始装备、学习技能或选择初始药剂');
-  d.cards.splice(d.cards.indexOf(assetId),1);
-  const position=matPoint(s,...(a.group==='skill'?[1450,150]:equipmentSlot(a.code)));
-  putCard(s,assetId,position.x,position.y,a.group==='skill'?'learned':'inventory');
+  takeDeckCard(d,d.cards.indexOf(assetId));
+  const slot=s.objects.find(o=>o.type==='deck'&&o.ihSlot===(a.group==='skill'?'learned':equipmentSlotKey(a.code)));
+  const position=slot||matPoint(s,...(a.group==='skill'?[1470,150]:equipmentSlot(a.code)));
+  const card=putCard(s,assetId,position.x,position.y,a.group==='skill'?'learned':'inventory');
+  if(slot){card.rotation=slot.rotation;if(canReceiveCards(slot,1))mergeCards(s,[slot.id,card.id]);else card.x+=slot.width+20;}
 }
 export function act(s,action,arg,selected=[],random=Math.random){
   if(action==='explore')explore(s);

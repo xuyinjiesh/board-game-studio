@@ -1,8 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {wheelIntent,isPanGesture,findCardSnapTarget,snapCardOnto,startDeckPress,DECK_HOLD_MS} from '../src/interactions.js';
-import {adjustTokenValue} from '../src/model.js';
+import {drawFromDeck,adjustTokenValue} from '../src/model.js';
 import {createIronHelmSession,ironHelm,value} from '../src/games/iron-helm.js';
+import {scheduleDeckDraw,DECK_CLICK_MS} from '../src/interactions.js';
+
+test('a deck click waits for a double click and canceled draws cannot consume cards',()=>{
+  let callback,delay,draws=0,canceled=0;
+  const schedule=(fn,ms)=>{callback=fn;delay=ms;return 42;},cancel=id=>{assert.equal(id,42);canceled++;};
+  const first=scheduleDeckDraw(()=>draws++,{schedule,cancel});assert.equal(delay,DECK_CLICK_MS);assert.equal(draws,0);
+  first.cancel();callback();assert.equal(draws,0);assert.equal(canceled,1);
+  const single=scheduleDeckDraw(()=>draws++,{schedule,cancel});callback();single.cancel();assert.equal(draws,1);assert.equal(canceled,1);
+});
 
 test('short deck presses and early drags cancel the long-press callback',()=>{
   let callback,delay,held=0,cancelled=0;
@@ -71,7 +80,7 @@ test('card magnet detects the top destination in its rotated center, leaving edg
 });
 
 test('magnetic placement preserves both cards, their roles and faces, and puts the moved card on top',()=>{
-  const s=createIronHelmSession(),moving=s.objects.find(o=>o.ihRole==='inventory'),target=s.objects.find(o=>o.ihRole==='hero');
+  const s=createIronHelmSession(),moving=drawFromDeck(s,s.objects.find(o=>o.ihRole==='inventory')),target=drawFromDeck(s,s.objects.find(o=>o.ihRole==='hero'));s.objects=s.objects.filter(o=>o.type!=='deck');
   const original=structuredClone(s),identity={id:moving.id,assetId:moving.assetId,faceUp:moving.faceUp,ihRole:moving.ihRole};
   target.rotation=90;
   assert.equal(snapCardOnto(s,moving,target),true);

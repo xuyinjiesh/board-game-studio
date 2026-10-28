@@ -1,4 +1,4 @@
-import {baseObject} from '../model.js';
+import {baseObject,createFixedPile} from '../model.js';
 
 export const markerColors={health:'#a84248',energy:'#874b91',gold:'#b8943c',rations:'#b8663b',poison:'#63823f',morality:'#9c9484',level:'#97764e',turn:'#586f80',eyes:'#536d95',foe:'#45433e'};
 export const ironHelmTableAssets=[
@@ -35,9 +35,10 @@ export function dropMarker(s,o,clamp){
   if(Math.hypot(nearest.x-o.x,nearest.y-o.y)<=radius){clamp(s,o,nearest.value-o.value);syncMarker(s,o);}
 }
 export function equipmentSlot(code){
-  return ['4','12'].includes(code)?[1325,330]:['7','14'].includes(code)?[1325,150]:['8','11','3'].includes(code)?[1450,330]:['2','5','6'].includes(code)?[1180,530]:[1180,330];
+  return ['4','12'].includes(code)?[1325,330]:['7','14'].includes(code)?[1325,150]:['8','11','3'].includes(code)?[1470,330]:['2','5','6'].includes(code)?[1180,515]:[1180,330];
 }
-const slots={plot:[65,105],'plot-discard':[65,284],potion:[200,105],'potion-discard':[200,284],loot:[335,105],'loot-discard':[335,284],enemy:[465,105],'enemy-discard':[465,284],trapping:[863,105],skill:[1000,105],hero:[1180,150],learned:[1450,150],dungeon:[332,518],'dungeon-discard':[468,518],boss:[70,765],'hero-reserve':[235,765],blessing:[400,765],spent:[565,765],'level-track':[730,765],'morality-track':[895,765],'door-a':[603,518],'door-b':[738,518],'door-first':[603,518],'door-second':[738,518]};
+export function equipmentSlotKey(code){return ['4','12'].includes(code)?'body':['7','14'].includes(code)?'head':['8','11','3'].includes(code)?'off':['2','5','6'].includes(code)?'accessory':'main';}
+const slots={plot:[65,105],'plot-discard':[65,284],potion:[200,105],'potion-discard':[200,284],loot:[335,105],'loot-discard':[335,284],enemy:[465,105],'enemy-discard':[465,284],trapping:[863,105],skill:[1000,105],hero:[1180,150],learned:[1470,150],dungeon:[332,518],'dungeon-discard':[468,518],boss:[70,765],'hero-reserve':[235,765],blessing:[400,765],spent:[565,765],'level-track':[730,765],'morality-track':[895,765],'door-a':[603,518],'door-b':[738,518],'door-first':[603,518],'door-second':[738,518]};
 function fixDeckPositions(s){
   for(const o of s.objects.filter(o=>o.type==='deck')){
     o.fixedPosition=true;
@@ -45,10 +46,33 @@ function fixDeckPositions(s){
     if(['dungeon','dungeon-discard'].includes(o.ihRole)){o.width=150;o.height=210;}
   }
 }
+function addEquipmentPiles(s){
+  const places=[['hero','角色',1180,150],['head','头部',1325,150],['learned','已学技能',1470,150],['main','主手',1180,330],['body','身体',1325,330],['off','副手',1470,330],['accessory','配饰',1180,515]];
+  for(const [key,name,x,y] of places){
+    if(s.objects.some(o=>o.ihSlot===key))continue;
+    const p=matPoint(s,x,y);
+    const card=s.objects.find(o=>o.type==='card'&&['hero','inventory','learned'].includes(o.ihRole)&&Math.hypot(o.x-p.x,o.y-p.y)<.01);
+    const deck={...createFixedPile(p.x,p.y),width:140,height:196,rotation:boardFor(s)?.rotation||0,ihSlot:key,ihRole:card?.ihRole||(key==='hero'||key==='learned'?key:'equipment-slot'),name,maxCards:key==='learned'?500:1,z:card?.z??2};
+    if(card){deck.id=card.id;deck.cards=[card.assetId];deck.faceUp=card.faceUp;s.objects.splice(s.objects.indexOf(card),1,deck);}
+    else s.objects.push(deck);
+  }
+}
+function addDoorPiles(s){
+  for(const [side,x,name] of [['a',603,'左门'],['b',738,'右门']]){
+    const key=`door-${side}`;
+    if(s.objects.some(o=>o.ihSlot===key))continue;
+    const point=matPoint(s,x,518),other=matPoint(s,side==='a'?738:603,518);
+    const card=s.objects.find(o=>o.type==='card'&&(o.ihRole===key||['door-first','door-second'].includes(o.ihRole)&&Math.hypot(o.x-point.x,o.y-point.y)<=Math.hypot(o.x-other.x,o.y-other.y)));
+    const source=s.objects.find(o=>o.ihRole==='dungeon'&&o.type==='deck');
+    const slot={...createFixedPile(point.x,point.y),width:source?.width||150,height:source?.height||210,rotation:boardFor(s)?.rotation||0,ihSlot:key,ihRole:'door-slot',name,faceUp:false};
+    if(card){Object.assign(slot,{id:card.id,x:card.x,y:card.y,width:card.width||slot.width,height:card.height||slot.height,rotation:card.rotation,cards:[card.assetId],faceUp:card.faceUp,ihRole:card.ihRole});s.objects.splice(s.objects.indexOf(card),1,slot);}
+    else s.objects.push(slot);
+  }
+}
 export function arrangeIronHelmTable(s){
   if(!boardFor(s))s.objects.unshift({...baseObject('board',1000,2000*320/780/2,0),assetId:'ih-playmat',width:2000,height:2000*320/780,locked:true});
   for(const o of s.objects){
-    const slot=o.ihRole==='inventory'?equipmentSlot(o.assetId.split('-').at(-1)):slots[o.ihRole];
+    const slot=o.ihRole==='inventory'?equipmentSlot((o.assetId||o.cards?.at(-1)||'').split('-').at(-1)):slots[o.ihRole];
     if(slot){Object.assign(o,matPoint(s,...slot));if(['card','deck'].includes(o.type)&&o.ihRole!=='blessing'){o.width=140;o.height=196;}}
     if(o.type==='token'&&o.kind?.startsWith('ih-')){
       const key=o.kind.slice(3);o.assetId=`ih-marker-${key}`;o.color=markerColors[key]||o.color;o.width=o.height=tracks[key]?28:48;
@@ -58,15 +82,37 @@ export function arrangeIronHelmTable(s){
   }
   s.objects.filter(o=>o.type==='die').forEach((o,i)=>Object.assign(o,matPoint(s,1055+i*60,790)));
   fixDeckPositions(s);
+  addEquipmentPiles(s);
+  addDoorPiles(s);
 }
 export function upgradeIronHelmTable(s){
   const known=new Set(s.assets.map(a=>a.id));s.assets.push(...structuredClone(ironHelmTableAssets.filter(a=>!known.has(a.id))));
-  if(s.ironHelmTableVersion===2)return;
-  if(s.ironHelmTableVersion!==1){
+  if(s.ironHelmTableVersion===5)return;
+  const previousVersion=s.ironHelmTableVersion;
+  if(previousVersion===4){
+    for(const objects of [s.objects,s.initialSetup?.objects,s.setup?.objects,...(s.setupProfiles||[]).map(p=>p.setup.objects)].filter(Boolean))addDoorPiles({...s,objects});
+    s.ironHelmTableVersion=5;return;
+  }
+  if(![1,2,3].includes(previousVersion)){
     arrangeIronHelmTable(s);
     if(s.initialSetup){const initial={...s,objects:s.initialSetup.objects};arrangeIronHelmTable(initial);s.initialSetup.objects=initial.objects.map(({id,...o})=>o);}
   }
-  fixDeckPositions(s);
-  for(const setup of [s.initialSetup,s.setup])if(setup)fixDeckPositions({...s,objects:setup.objects});
-  s.ironHelmTableVersion=2;
+  if(![2,3].includes(previousVersion)){
+    fixDeckPositions(s);
+    for(const setup of [s.initialSetup,s.setup])if(setup)fixDeckPositions({...s,objects:setup.objects});
+  }
+  // Only move cards still at the old printed-slot defaults; keep player edits.
+  for(const table of [s,...[s.initialSetup,s.setup,...(s.setupProfiles||[]).map(p=>p.setup)].filter(Boolean).map(setup=>({...s,objects:setup.objects}))]){
+    if(!boardFor(table))continue;
+    for(const o of table.objects.filter(o=>['card','deck'].includes(o.type))){
+      const code=(o.assetId||o.cards?.at(-1))?.split('-').at(-1);
+      const old=o.ihRole==='learned'?[1450,150]:o.ihRole==='inventory'?(['8','11','3'].includes(code)?[1450,330]:['2','5','6'].includes(code)?[1180,530]:null):null;
+      if(!old)continue;
+      const point=matPoint(table,...old);
+      if(Math.hypot(o.x-point.x,o.y-point.y)<.01)Object.assign(o,matPoint(table,...(o.ihRole==='learned'?slots.learned:equipmentSlot(code))));
+    }
+    addEquipmentPiles(table);
+    addDoorPiles(table);
+  }
+  s.ironHelmTableVersion=5;
 }

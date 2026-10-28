@@ -2,3 +2,6 @@ node_modules/
 dist/
 tmp/
 *.log
+
+# Local verification scripts and screenshots
+/output/

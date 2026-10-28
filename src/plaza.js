@@ -11,7 +11,7 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
   function confirmRemoval(kind,id){
     const entry=(kind==='projects'?projects:exhibits).find(e=>e.id===id);if(!entry)return;
     pendingRemoval={kind,id};
-    const modal=$('#modal');modal.dataset.kind='library-removal';$('#modal-content').innerHTML=`<h2>${kind==='projects'?'删除草稿':'撤销发布'}？</h2><p class="modal-lead">${escape(entry.session.name)}<br>${kind==='projects'?'只删除本地草稿，广场已发布的版本会保留。':'只从广场撤下，本地草稿会保留。'}操作后可在当前页面撤销。</p><button class="primary-button" data-confirm-library-removal>${kind==='projects'?'删除草稿':'撤销发布'}</button><button class="full-width quiet" data-cancel-library-removal>取消</button>`;modal.classList.remove('wide');modal.showModal();
+    const modal=$('#modal');modal.dataset.kind='library-removal';$('#modal-content').innerHTML=`<h2>${kind==='projects'?'删除草稿':'撤销发布'}？</h2><p class="modal-lead">${escape(entry.session.name)}<br>${kind==='projects'?'只删除本地草稿，作品广场已发布的版本会保留。':'只从作品广场撤下，本地草稿会保留。'}操作后可在当前页面撤销。</p><button class="primary-button" data-confirm-library-removal>${kind==='projects'?'删除草稿':'撤销发布'}</button><button class="full-width quiet" data-cancel-library-removal>取消</button>`;modal.classList.remove('wide');modal.showModal();
   }
   function card(session,type,id){
     const cards=session.assets.filter(a=>a.type==='card').slice(0,3),image=session.assets.find(a=>a.type==='board'||a.type==='token');
@@ -26,9 +26,9 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
       for(const game of examples){if(exhibits.some(e=>libraryName(e.session.name)===libraryName(game.title)))continue;const s=game.create(()=>.5);s.name=game.title;if(matches(s))cards.push(card(s,'example',game.id));}
       for(const entry of exhibits)if(matches(entry.session))cards.push(card(entry.session,'exhibit',entry.id));
     }else for(const entry of projects)if(matches(entry.session))cards.push(card(entry.session,'project',entry.id));
-    $('#plaza-grid').innerHTML=cards.join('')||'<div class="plaza-empty"><h2>'+ (query?'没有找到相关游戏':'还没有本地草稿')+'</h2><p>'+(query?'换个关键词试试。':'新建游戏，或从广场编辑游戏。')+'</p></div>';
+    $('#plaza-grid').innerHTML=cards.join('')||'<div class="plaza-empty"><h2>'+ (query?'没有找到相关游戏':'还没有本地草稿')+'</h2><p>'+(query?'换个关键词试试。':'新建游戏，或从作品广场编辑游戏。')+'</p></div>';
     document.querySelectorAll('[data-plaza-filter]').forEach(b=>{const active=b.dataset.plazaFilter===filter;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});
-    $('#plaza-section-title').textContent=filter==='all'?'广场':'本地草稿';
+    $('#plaza-section-title').textContent=filter==='all'?'作品广场':'本地草稿';
     $('#plaza-section-note').textContent=filter==='all'?'选择一个游戏，开始游玩或编辑。':'直接摆放、设置开局，修改自动保存在这里。';
     $('#plaza-project-count').textContent=String(projects.length);
   }
