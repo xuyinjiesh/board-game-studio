@@ -1,63 +1,77 @@
-import {examples,createProject,copyProject} from './projects.js';
+import {examples,createProject,copyProject,openEditor,startOpening} from './projects.js';
 import {projectStore} from './project-store.js';
-
+import {findLibraryDraft,libraryName} from './library.js';
+import {uid} from './model.js';
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const $=selector=>document.querySelector(selector);
-export function createPlaza({flush,activate,notify}){
-  let filter='all',projects=[],exhibits=[],busy=false;
-  const featured=examples[0],featuredSession=featured?.create(()=>.5);
-  if(featuredSession){const front=featuredSession.assets[0],back=featuredSession.assets[2];$('#plaza-featured').innerHTML=`<div class="hero-orbit"></div><img class="hero-card hero-card-back" src="${escape(back.back||back.front)}" alt="${escape(back.name)}"><img class="hero-card hero-card-front" src="${escape(front.front)}" alt="${escape(front.name)}"><div class="hero-caption"><span>01 / THE FIRST TABLE</span><strong>${escape(featured.title)} <small>${escape(featured.subtitle)}</small></strong><p>${escape(featured.tagline)}</p></div><span class="hero-star">✳</span>`;}
-  function cover(session,example=false){
-    const cards=session.assets.filter(a=>a.type==='card').slice(0,3);
-    if(cards.length)return `<div class="plaza-art ${example?'example-art':''}">${cards.map(a=>`<img src="${escape(a.front)}" alt="${escape(a.name)}" loading="lazy">`).join('')}</div>`;
-    const image=session.assets.find(a=>a.type==='board'||a.type==='token');
-    return image?`<div class="plaza-art single-art"><img src="${escape(image.front)}" alt="${escape(image.name)}"></div>`:'<div class="plaza-art empty-art"><span>◇</span><i>YOUR NEXT GAME</i></div>';
+const $=s=>document.querySelector(s);
+export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
+  let filter='all',projects=[],exhibits=[],busy=false,pendingRemoval=null,lastRemoval=null;
+  const notice=document.createElement('div');notice.className='library-notice';notice.hidden=true;notice.setAttribute('role','status');$('#plaza-grid').before(notice);
+  function renderNotice(){notice.hidden=!lastRemoval;notice.innerHTML=lastRemoval?`<span>${lastRemoval.kind==='projects'?'已删除草稿':'已撤销发布'}「${escape(lastRemoval.entries[0].session.name)}」</span><button data-undo-library>撤销</button>`:'';}
+  function confirmRemoval(kind,id){
+    const entry=(kind==='projects'?projects:exhibits).find(e=>e.id===id);if(!entry)return;
+    pendingRemoval={kind,id};
+    const modal=$('#modal');modal.dataset.kind='library-removal';$('#modal-content').innerHTML=`<h2>${kind==='projects'?'删除草稿':'撤销发布'}？</h2><p class="modal-lead">${escape(entry.session.name)}<br>${kind==='projects'?'只删除本地草稿，广场已发布的版本会保留。':'只从广场撤下，本地草稿会保留。'}操作后可在当前页面撤销。</p><button class="primary-button" data-confirm-library-removal>${kind==='projects'?'删除草稿':'撤销发布'}</button><button class="full-width quiet" data-cancel-library-removal>取消</button>`;modal.classList.remove('wide');modal.showModal();
   }
   function card(session,type,id){
-    const label={example:'示例游戏',project:'我的项目',exhibit:'本地作品',archived:'已归档项目'}[type];
-    const action={example:'从示例开始',project:'继续项目',exhibit:'打开游玩副本',archived:'恢复项目'}[type];
-    return `<article class="plaza-card">${cover(session,type==='example')}<div class="plaza-card-body"><div class="plaza-card-kicker"><span>${label}</span><span>${session.assets.length} 份资产</span></div><h3>${escape(session.name)}</h3><p>${escape(session.meta?.description||'一张桌面，一场等待开始的游戏。')}</p><div class="plaza-card-meta"><span>${escape(session.meta?.players||'自由人数')}</span><i>·</i><span>${escape(session.meta?.duration||'自由时长')}</span></div><button data-plaza-${type}="${escape(id)}">${action}<span>↗</span></button>${type==='exhibit'?`<button class="unlist-exhibit" data-unlist="${escape(id)}">撤下展示</button>`:type==='project'?`<button class="unlist-exhibit" data-archive="${escape(id)}">归档项目</button>`:''}</div></article>`;
+    const cards=session.assets.filter(a=>a.type==='card').slice(0,3),image=session.assets.find(a=>a.type==='board'||a.type==='token');
+    const art=cards.length?cards.map(a=>'<img src="'+escape(a.front)+'" alt="" loading="lazy">').join(''):image?'<img class="single-cover" src="'+escape(image.front)+'" alt="" loading="lazy">':'<span>◇</span>';
+    const attrs='="'+escape(id)+'"';
+    const buttons=type==='project'?'<button data-plaza-project'+attrs+'>编辑草稿 <span>↗</span></button>'+(session.mode==='play'?'<button class="secondary" data-resume-project'+attrs+'>继续游玩</button>':''):'<button data-plaza-'+type+attrs+'>开始游玩 <span>↗</span></button><button class="secondary" data-edit-'+type+attrs+'>编辑游戏</button>';
+    return '<article class="plaza-card"><div class="plaza-art">'+art+'</div><div class="plaza-card-body"><h2>'+escape(session.name)+'</h2><p>'+escape(session.meta?.description||'自由摆放，随时开始。')+'</p><div class="plaza-card-meta">'+escape([session.meta?.players,session.meta?.duration].filter(Boolean).join(' · '))+'</div><div class="plaza-card-actions">'+buttons+'</div>'+(type==='exhibit'?'<button class="unlist-exhibit" data-unlist'+attrs+'>撤销发布</button>':type==='project'?'<button class="delete-draft" data-delete-draft'+attrs+'>删除草稿</button>':'')+'</div></article>';
   }
   function renderCards(){
-    const query=$('#plaza-search').value.trim().toLowerCase();
-    $('.plaza-hero').hidden=filter!=='all'||!!query;
-    const matches=s=>[s.name,s.meta?.description].join(' ').toLowerCase().includes(query);
-    const cards=[];
-    if(filter==='all'||filter==='examples')for(const game of examples){const s=game.create(()=>.5);s.name=game.title;if(matches(s))cards.push(card(s,'example',game.id));}
-    if(filter==='all'||filter==='exhibits')for(const entry of exhibits)if(matches(entry.session))cards.push(card(entry.session,'exhibit',entry.id));
-    if(filter==='mine'||filter==='archived')for(const entry of projects)if(!!entry.session.archived===(filter==='archived')&&matches(entry.session))cards.push(card(entry.session,filter==='archived'?'archived':'project',entry.id));
-    $('#plaza-grid').innerHTML=cards.join('')||(query?'<div class="plaza-empty"><span>⌕</span><h3>还没有找到这个游戏</h3><p>试试其他名称，或创建自己的项目。</p></div>':`<div class="plaza-empty"><span>◇</span><h3>${filter==='mine'?'第一张桌面，等你开始。':'把你的第一部作品摆上来。'}</h3><p>${filter==='mine'?'新建一个项目，导入素材，再编写开局。':'在编辑界面保存初始设置，再选择「展示到广场」。'}</p></div>`);
-    $('#plaza-result-count').textContent=`${cards.length} ${filter==='mine'||filter==='archived'?'个项目':'个游戏'}`;
+    const query=$('#plaza-search').value.trim().toLowerCase(),matches=s=>[s.name,s.meta?.description].join(' ').toLowerCase().includes(query),cards=[];
+    if(filter==='all'){
+      for(const game of examples){if(exhibits.some(e=>libraryName(e.session.name)===libraryName(game.title)))continue;const s=game.create(()=>.5);s.name=game.title;if(matches(s))cards.push(card(s,'example',game.id));}
+      for(const entry of exhibits)if(matches(entry.session))cards.push(card(entry.session,'exhibit',entry.id));
+    }else for(const entry of projects)if(matches(entry.session))cards.push(card(entry.session,'project',entry.id));
+    $('#plaza-grid').innerHTML=cards.join('')||'<div class="plaza-empty"><h2>'+ (query?'没有找到相关游戏':'还没有本地草稿')+'</h2><p>'+(query?'换个关键词试试。':'新建游戏，或从广场编辑游戏。')+'</p></div>';
     document.querySelectorAll('[data-plaza-filter]').forEach(b=>{const active=b.dataset.plazaFilter===filter;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});
-    $('#plaza-section-title').textContent={all:'值得摆上桌的好游戏',examples:'从一个例子开始',exhibits:'你的作品，在这里相遇',mine:'每个灵感，都有一张桌面',archived:'暂时收好的灵感'}[filter];
-    $('#plaza-project-count').textContent=String(projects.filter(p=>!p.session.archived).length);
+    $('#plaza-section-title').textContent=filter==='all'?'广场':'本地草稿';
+    $('#plaza-section-note').textContent=filter==='all'?'选择一个游戏，开始游玩或编辑。':'直接摆放、设置开局，修改自动保存在这里。';
+    $('#plaza-project-count').textContent=String(projects.length);
   }
-  async function run(operation){
-    if(busy)return;busy=true;$('#plaza').setAttribute('aria-busy','true');
-    try{await operation();}catch(error){notify(error.message);}finally{busy=false;$('#plaza').removeAttribute('aria-busy');}
+  async function openGame(source,originKey,edit,newExample=false){
+    await flush();
+    const legacyNames=newExample?[examples.find(g=>g.id===source.gameId)?.create(()=>.5).name].filter(Boolean):[];
+    const existing=findLibraryDraft(await projectStore.list(),source,originKey,legacyNames);
+    const session=existing?.session||{...structuredClone(source),projectId:uid(),originKey};
+    if(edit){await activate(openEditor(session));return;}
+    if(existing?.session.mode==='play'){await activate(session);return;}
+    const opening=session.setupProfiles?.length>1?{...session,mode:'play',objects:[],awaitingOpening:true}:startOpening(session);
+    await activate(opening,{newExample:!existing&&newExample,chooseProfile:!existing});
   }
+  async function run(operation){if(busy)return;busy=true;$('#plaza').setAttribute('aria-busy','true');try{await operation();}catch(error){notify(error.message);}finally{busy=false;$('#plaza').removeAttribute('aria-busy');}}
   const api={
-    async show(nextFilter=filter){
-      await flush();filter=nextFilter;
-      $('#app').hidden=true;$('#plaza').hidden=false;
-      $('#plaza-loading').hidden=false;
-      try{[projects,exhibits]=await Promise.all([projectStore.list(),projectStore.exhibits()]);projects.sort((a,b)=>b.updatedAt-a.updatedAt);exhibits.sort((a,b)=>b.publishedAt-a.publishedAt);renderCards();}
-      finally{$('#plaza-loading').hidden=true;}
-    },
-    async create(name){await flush();await activate(createProject('custom',name));},
-    async import(session){await flush();await activate(copyProject(session));},
+    async show(nextFilter=filter){await flush();filter=nextFilter==='mine'?'mine':'all';$('#app').hidden=true;$('#plaza').hidden=false;$('#plaza-loading').hidden=false;try{[projects,exhibits]=await Promise.all([projectStore.list(),projectStore.exhibits()]);projects.sort((a,b)=>b.updatedAt-a.updatedAt);exhibits.sort((a,b)=>b.publishedAt-a.publishedAt);renderCards();}finally{$('#plaza-loading').hidden=true;}},
+    async create(name){await flush();const existing=findLibraryDraft(await projectStore.list(),{name});if(existing){notify('已有同名草稿，已打开原草稿');await activate(openEditor(existing.session));return;}await activate(createProject('custom',name));},
+    async import(session){await flush();if(findLibraryDraft(await projectStore.list(),session))throw new Error('本地草稿已有同名游戏，请先修改草稿名称再导入');await activate(openEditor(copyProject(session)));},
     refresh:()=>api.show(filter)
   };
   $('#plaza-search').addEventListener('input',renderCards);
   $('#plaza').addEventListener('click',e=>{
-    const button=e.target.closest('button');if(!button)return;
-    if(button.dataset.plazaFilter){filter=button.dataset.plazaFilter;renderCards();return;}
-    if(button.dataset.plazaExample)run(async()=>{await flush();await activate(createProject(button.dataset.plazaExample),{newExample:true});});
-    if(button.dataset.plazaProject)run(async()=>{await flush();const entry=await projectStore.get(button.dataset.plazaProject);if(!entry)throw new Error('项目未找到');await activate(entry.session);});
-    if(button.dataset.plazaExhibit)run(async()=>{await flush();const entry=exhibits.find(x=>x.id===button.dataset.plazaExhibit);if(!entry)throw new Error('作品未找到');await activate(copyProject(entry.session,{fromSetup:true}));});
-    if(button.dataset.unlist)run(async()=>{await projectStore.unlist(button.dataset.unlist);await api.show(filter);notify('已撤下展示，原项目仍保留在我的工坊');});
-    if(button.dataset.archive)run(async()=>{await projectStore.archive(button.dataset.archive,true);await api.show(filter);notify('已归档，可在「已归档」中恢复');});
-    if(button.dataset.plazaArchived)run(async()=>{await projectStore.archive(button.dataset.plazaArchived,false);await api.show('mine');notify('项目已恢复');});
+    const b=e.target.closest('button');if(!b)return;
+    if(b.dataset.plazaFilter){filter=b.dataset.plazaFilter;renderCards();return;}
+    const d=b.dataset;
+    if(d.plazaExample||d.editExample)run(async()=>{const game=examples.find(g=>g.id===(d.plazaExample||d.editExample));const source=createProject(game.id,game.title);await openGame(source,'example:'+game.id,!!d.editExample,true);});
+    if(d.resumeProject)run(async()=>{await flush();const entry=await projectStore.get(d.resumeProject);if(!entry)throw new Error('进度未找到');await activate(entry.session);});
+    if(d.plazaProject)run(async()=>{await flush();const entry=await projectStore.get(d.plazaProject);if(!entry)throw new Error('草稿未找到');await activate(openEditor(entry.session));});
+    if(d.plazaExhibit||d.editExhibit)run(async()=>{const entry=exhibits.find(x=>x.id===(d.plazaExhibit||d.editExhibit));if(!entry)throw new Error('作品未找到');await openGame(entry.session,'exhibit:'+entry.id,!!d.editExhibit);});
+    if(d.unlist)confirmRemoval('exhibits',d.unlist);
+    if(d.deleteDraft)confirmRemoval('projects',d.deleteDraft);
+    if(b.hasAttribute('data-undo-library'))run(async()=>{if(!lastRemoval)return;await projectStore.restore(lastRemoval.kind,lastRemoval.entries);lastRemoval=null;renderNotice();await api.show(filter);notify('已恢复');});
+  });
+  $('#modal').addEventListener('click',e=>{
+    const b=e.target.closest('button');if(!b)return;
+    if(b.hasAttribute('data-cancel-library-removal')){pendingRemoval=null;$('#modal').close();}
+    if(b.hasAttribute('data-confirm-library-removal'))run(async()=>{
+      if(!pendingRemoval)return;const {kind,id}=pendingRemoval;await flush();
+      const entries=kind==='projects'?await projectStore.removeDraft(id):await projectStore.unlist(id);
+      if(!entries.length)throw new Error('记录已不存在，请刷新页面');
+      if(kind==='projects')forgetDraft(entries.map(e=>e.id));
+      lastRemoval={kind,entries};pendingRemoval=null;$('#modal').close();renderNotice();await api.show(filter);
+    });
   });
   return api;
 }

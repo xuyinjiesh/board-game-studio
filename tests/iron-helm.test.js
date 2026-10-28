@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
 import {ironHelmAssets} from '../src/games/iron-helm-assets.js';
-import {createIronHelmSession,HEROES,value,changeValue,explore,revealDoor,switchDoor,finishTurn,nextLevel,takeFromCatalog,act} from '../src/games/iron-helm.js';
-import {validateSession,applySetup,dimensions} from '../src/model.js';
+import {createIronHelmSession,HEROES,value,changeValue,explore,revealDoor,switchDoor,finishTurn,nextLevel,takeFromCatalog,act,ironHelm,toolbar,journal} from '../src/games/iron-helm.js';
+import {ironHelmTableAssets,matPoint} from '../src/games/iron-helm-table.js';
+import {validateSession,applySetup,dimensions,drawFromDeck,canMoveObject,objectsInRect,mergeCards} from '../src/model.js';
 import {createProject,copyProject,migrateSession,gameFor} from '../src/projects.js';
 const pile=(s,role)=>s.objects.find(o=>o.type==='deck'&&o.ihRole===role);
 const cards=s=>s.objects.flatMap(o=>o.type==='card'?[o.assetId]:o.type==='deck'?o.cards:[]).sort();
@@ -83,4 +84,75 @@ test('blessings stay face down, square tiles keep their own dimensions, and heal
   changeValue(s,'health',100);changeValue(s,'energy',100);changeValue(s,'morality',-100);
   assert.equal(value(s,'health'),14);assert.equal(value(s,'energy'),11);assert.equal(value(s,'morality'),-5);
   assert.deepEqual(cards(s),all);const bad=structuredClone(s);bad.objects.find(o=>o.type==='token').value=NaN;assert.throws(()=>validateSession(bad));
+});
+
+test('playmat and square markers have bundled assets and survive setup reset',()=>{
+  const s=createIronHelmSession(),board=s.objects.find(o=>o.type==='board');
+  assert.equal(board.assetId,'ih-playmat');assert.equal(board.locked,true);
+  assert.ok(Math.abs(board.width/board.height-780/320)<.001);
+  for(const a of ironHelmTableAssets)assert.ok(existsSync(new URL('../public'+a.front,import.meta.url)),a.front);
+  for(const o of s.objects.filter(o=>o.type==='token')){
+    const {w,h}=dimensions(s,o);assert.equal(w,h);assert.ok(w<=48);assert.ok(s.assets.some(a=>a.id===o.assetId));
+  }
+  const deck=pile(s,'enemy'),drawn=drawFromDeck(s,deck);assert.deepEqual(dimensions(s,drawn),dimensions(s,deck));
+  assert.deepEqual(cards(applySetup(s)),all);assert.deepEqual(validateSession(s),s);
+});
+
+test('moving a marker to a printed value updates its counter, with hero caps and transformed boards',()=>{
+  const s=createIronHelmSession(),health=s.objects.find(o=>o.kind==='ih-health');
+  Object.assign(health,matPoint(s,625,245));ironHelm.onTokenDrop(s,health);
+  assert.equal(health.value,8);
+  changeValue(s,'health',1);assert.deepEqual({x:health.x,y:health.y},matPoint(s,649,245));
+  Object.assign(health,matPoint(s,697,272));ironHelm.onTokenDrop(s,health);assert.equal(health.value,14);
+  const board=s.objects.find(o=>o.type==='board');board.rotation=90;board.width=1000;board.height=1000*320/780;
+  Object.assign(health,matPoint(s,673,218));ironHelm.onTokenDrop(s,health);assert.equal(health.value,3);
+  health.x=-1000;health.y=-1000;ironHelm.onTokenDrop(s,health);assert.equal(health.value,3);
+});
+
+test('legacy iron helm saves gain the mat once without losing cards, counters or door decisions',()=>{
+  const s=createIronHelmSession();explore(s);revealDoor(s,'b');changeValue(s,'health',-4);
+  delete s.ironHelmTableVersion;s.assets=s.assets.filter(a=>!ironHelmTableAssets.some(b=>b.id===a.id));
+  s.objects=s.objects.filter(o=>o.type!=='board');s.initialSetup.objects=s.initialSetup.objects.filter(o=>o.type!=='board');
+  const restored=migrateSession(s);assert.equal(value(restored,'health'),10);assert.deepEqual(cards(restored),all);
+  assert.equal(restored.objects.find(o=>o.kind==='ih-turn').phase,'first');
+  assert.equal(restored.objects.filter(o=>o.type==='board').length,1);assert.equal(restored.initialSetup.objects.filter(o=>o.type==='board').length,1);
+  assert.deepEqual(migrateSession(restored),restored);switchDoor(restored);finishTurn(restored);assert.equal(value(restored,'turn'),1);
+});
+
+test('compact header only exposes the manual while all turn actions remain available inside',()=>{
+  const s=createIronHelmSession();assert.match(toolbar(s),/铁盔/);assert.match(toolbar(s),/规则手册/);
+  assert.equal((toolbar(s).match(/<button/g)||[]).length,1);assert.doesNotMatch(toolbar(s),/抽两张门|ih-vitals|第.*层/);
+  assert.match(journal(s),/抽两张门/);explore(s);assert.match(journal(s),/先看左门/);revealDoor(s,'a');assert.match(journal(s),/放弃，换门/);assert.match(journal(s),/结算完毕/);
+});
+
+test('fixed dungeon piles align with the printed doors and still deal movable top cards',()=>{
+  const s=createIronHelmSession(),dungeon=pile(s,'dungeon'),discard=pile(s,'dungeon-discard');
+  assert.deepEqual({x:dungeon.x,y:dungeon.y},matPoint(s,332,518));
+  assert.deepEqual({x:discard.x,y:discard.y},matPoint(s,468,518));
+  assert.deepEqual(dimensions(s,dungeon),{w:150,h:210});
+  for(const deck of s.objects.filter(o=>o.type==='deck')){assert.equal(deck.fixedPosition,true);assert.equal(canMoveObject(deck),false);}
+  assert.ok(objectsInRect(s,{left:-10000,right:10000,top:-10000,bottom:10000}).every(o=>o.type!=='deck'));
+  const before={x:dungeon.x,y:dungeon.y,rotation:dungeon.rotation},card=drawFromDeck(s,dungeon);
+  assert.equal(canMoveObject(card),true);assert.deepEqual(dimensions(s,card),dimensions(s,dungeon));
+  assert.deepEqual({x:dungeon.x,y:dungeon.y,rotation:dungeon.rotation},before);assert.deepEqual(cards(s),all);
+});
+
+test('returning cards preserves the fixed pile identity and cannot combine two fixed piles',()=>{
+  const s=createIronHelmSession(),deck=pile(s,'dungeon'),before=structuredClone(deck),card=drawFromDeck(s,deck);
+  assert.equal(mergeCards(s,[deck.id,card.id]),deck);assert.deepEqual(deck,before);assert.deepEqual(cards(s),all);
+  const baseline=structuredClone(s);assert.equal(mergeCards(s,[deck.id,pile(s,'enemy').id]),null);assert.deepEqual(s,baseline);
+});
+
+test('version-one saves correct only pile placement and keep in-progress cards and setups',()=>{
+  const s=createIronHelmSession();explore(s);revealDoor(s,'b');
+  s.ironHelmTableVersion=1;const door=s.objects.find(o=>o.ihRole==='door-first');door.x=1777;door.y=888;
+  s.setup=structuredClone(s.initialSetup);
+  for(const objects of [s.objects,s.initialSetup.objects,s.setup.objects])for(const o of objects.filter(o=>o.type==='deck')){delete o.fixedPosition;o.x+=10;o.y+=16;o.rotation=15;}
+  const restored=migrateSession(s);assert.equal(restored.ironHelmTableVersion,2);
+  const held=restored.objects.find(o=>o.id===door.id);assert.equal(held.x,1777);assert.equal(held.y,888);assert.equal(held.faceUp,true);
+  for(const current of [restored,applySetup(restored),applySetup(restored,restored.initialSetup)]){
+    const deck=pile(current,'dungeon');assert.deepEqual({x:deck.x,y:deck.y},matPoint(current,332,518));
+    assert.equal(deck.rotation,0);assert.ok(current.objects.filter(o=>o.type==='deck').every(o=>o.fixedPosition));assert.deepEqual(cards(current),all);
+  }
+  assert.deepEqual(migrateSession(restored),restored);
 });

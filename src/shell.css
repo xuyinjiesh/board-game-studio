@@ -44,27 +44,12 @@
 #app[data-mode="play"] #play-new-game{display:flex}
 #mode-toggle{right:138px}
 @media(max-width:760px){#play-new-game{right:12px;top:12px;width:100px;height:40px}#mode-toggle{right:124px}}
-.setup-drawer.drawer{left:96px;width:500px;max-width:calc(100vw - 120px);transform:translateX(-18px)}
-.setup-drawer.drawer.open{transform:translateX(0)}
-.setup-drawer h2 small{font-size:11px;font-weight:400;color:#91a17e;letter-spacing:0}
-.editor-dock [data-drawer="setup"] small{white-space:nowrap;letter-spacing:0}
-#selection-marquee{position:absolute;z-index:2000010;pointer-events:none;border:1px solid #e9edb99c;background:#dbe9b31c;border-radius:2px}
-#selection-marquee[hidden]{display:none}
-.setup-intro{font-size:16px;color:#405335;margin:0 0 10px}
-#setup-status{font-size:11px;color:#70845e;line-height:1.6;margin:0 0 16px}
-.setup-tools,.setup-buttons{display:flex;gap:8px;align-items:center}
-.setup-tools button,.setup-buttons>button:not(.primary-button){padding:10px 12px;border:1px solid #d3ddc7;border-radius:7px;font-size:11px;background:#edf1e4;color:#526c40}
-.setup-tools{margin-bottom:20px}.setup-label{display:block;font-size:11px;color:#70845e;margin-bottom:9px}
-#setup-source{display:block;width:100%;min-height:300px;height:38dvh;resize:vertical;box-sizing:border-box;padding:14px;border:1px solid #ced9c1;border-radius:8px;background:#eef1e7;color:#354d32;font:12px/1.75 Consolas,monospace;tab-size:2;white-space:pre;overflow:auto}
-#setup-source:focus{outline:2px solid #a4ba8b;outline-offset:1px}
-#setup-error{color:#a3442c;font-size:11px;line-height:1.7;white-space:pre-wrap;margin:9px 0}
-.setup-buttons .primary-button{margin:0;flex:1;font-size:12px}.setup-scroll>.subtle-note{font-size:11px;line-height:1.8}
-#setup-guide{border-top:1px solid #dce4d0;margin-top:20px;padding:16px 0;font-size:11px;color:#728364;line-height:1.8}
-#setup-guide summary{cursor:pointer;color:#4b643b}#setup-assets{max-height:200px;overflow:auto}#setup-assets code{color:#405c36}
-.setup-scroll>.text-button{font-size:10px;line-height:1.7;padding:10px 0}
-@media(max-width:760px){.setup-drawer.drawer{left:76px;width:500px;max-width:calc(100vw - 88px)}.setup-tools{flex-wrap:wrap}#setup-source{font-size:11px;min-height:240px}}
-
+#selection-marquee{position:absolute;z-index:2000010;pointer-events:none;border:1px solid #e9edb99c;background:#dbe9b31c;border-radius:2px}#selection-marquee[hidden]{display:none}
+.object-drawer.drawer{right:24px;width:300px;max-width:calc(100vw - 48px);transform:translateX(18px)}.object-drawer.drawer.open{transform:translateX(0)}.object-drawer .drawer-heading{padding:18px 0;margin-bottom:15px}.object-drawer .drawer-heading h2{margin:0;font-size:15px}.object-drawer .selected-heading h2{font-size:18px}.object-drawer .inspector-card,.object-drawer .deck-preview{width:130px;height:195px}.object-drawer .subtle-note{font-size:11px}.object-drawer .inspector-section{margin-top:20px;padding-top:18px}
+.opening-properties{padding:15px 0;margin:16px 0;border-top:1px solid #dce4d0;border-bottom:1px solid #dce4d0}.opening-properties h3{font-size:13px;font-weight:500;margin-bottom:14px}.opening-properties label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:#718460;margin:10px 0}.opening-properties select,.opening-properties input{min-width:0;width:155px;background:#fffef8;color:#48613a;border:1px solid #d3ddc7;border-radius:6px;padding:8px;font-size:11px}.opening-properties p{font-size:10px;line-height:1.8;color:#98a28b;margin-top:12px}.opening-properties details{font-size:11px;color:#748566;margin:12px 0}.opening-properties summary{cursor:pointer}.deck-order{list-style:none;padding:0;margin:9px 0;max-height:180px;overflow:auto}.deck-order li{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid #e8edde}.deck-order li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.deck-order button{padding:4px 7px;border:1px solid #dce4d0;border-radius:4px}.token-back{display:grid;place-items:center;width:100%;height:100%;color:#efe4c8;font-size:30px}
+@media(max-width:900px){.object-drawer.drawer{right:12px;max-width:calc(100vw - 88px)}}
 #play-reset-view{position:absolute;right:22px;bottom:22px;z-index:30;display:none;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:10px 15px;border:1px solid #c6d6b85c;border-radius:9px;background:#284733ed;color:#e7eddc;font-size:12px;box-shadow:0 3px 12px #122a1c24}
 #play-reset-view:hover{background:#3a5940;color:#fff9e6;border-color:#c6d6b89c}
 #app[data-mode="play"] #play-reset-view{display:flex}
 @media(max-width:760px){#play-reset-view{right:12px;bottom:12px;min-height:40px;padding:9px 12px}}
+.table-object.deal{border:2px dashed #e5e6bb9c;border-radius:9px;background:#b9c9a01a;color:#ecedd2;box-shadow:0 5px 14px #112b2020;cursor:grab}.deal-placeholder{width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:12px;padding:12px;pointer-events:none}.deal-placeholder>span{font-size:35px;opacity:.65}.deal-placeholder strong{font-size:16px;font-weight:500;max-width:100%;overflow:hidden;text-overflow:ellipsis}.deal-placeholder small{font-size:11px;line-height:1.8}.deal-placeholder em{font-style:normal;font-size:10px;opacity:.65}.deal-create-button{display:block;width:100%;border:1px solid #cad8ba;border-radius:6px;padding:10px;color:#506d40;background:#eaf0df;font-size:11px;margin:13px 0}.opening-properties input[type=checkbox]{width:16px;min-width:16px}.opening-properties .opening-error{color:#a14c38}.profile-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:20px 0}.profile-list>button{display:flex;flex-direction:column;text-align:left;gap:9px;padding:16px;border:1px solid #dce4cf;border-radius:8px;background:#f3f6eb;min-width:0}.profile-list>button.active{border-color:#8da776;background:#e8efdc}.profile-list strong{font-size:15px;font-weight:500;overflow-wrap:anywhere}.profile-list small{font-size:10px;color:#8b9b7b;line-height:1.7}.editor-dock [data-action=manage-profiles] small{letter-spacing:0;white-space:nowrap}#active-profile-name:empty{display:none}@media(max-width:420px){.profile-list{grid-template-columns:1fr}}

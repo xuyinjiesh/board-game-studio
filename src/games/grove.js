@@ -23,7 +23,12 @@ export function createGroveSession(random=Math.random){
   objects.push({...baseObject('token',1110,785,25),kind:'squirrel',color:'#b86231',name:'松鼠',rotation:tilt()});
   objects.push({...baseObject('token',1225,785,26),kind:'wheelbarrow',color:'#7fa75e',name:'独轮车',rotation:tilt()});
   const state={...createSession('果丛 · 我的桌面'),gameId:'grove',objects,assets:structuredClone(builtinAssets),mode:'play',meta:{description:'叠一片绿意，收一篮阳光。用 18 张双面卡牌，种出一座属于自己的果园。',players:'1 人',duration:'10 分钟',rules:''}};
-  state.initialSetup={...captureSetup(state),name:'果丛 · 随机开局',randomizeCards:true};
+  const source={...baseObject('deck',245,1070,2),cards:[...all],faceUp:false,name:'开局牌库 · 18 张',setupKey:'grove-opening-pool',setupOrder:'shuffle',setupHideEmpty:true};
+  const placements=objects.filter(o=>['card','deck'].includes(o.type)).map((o,index)=>{
+    const {id,assetId,cards,type,...placement}=o;
+    return {...placement,type:'deal',sourceKey:source.setupKey,name:o.type==='deck'?o.name:o.planted?'起始果园':'初始待打牌',count:o.type==='deck'?o.cards.length:1,layout:o.type==='deck'?'deck':'spread',spacing:40,order:index+1,width:160,height:240,setupFace:'fixed'};
+  });
+  state.initialSetup={...captureSetup(state),name:'果丛 · 随机开局',objects:[(({id,...o})=>o)(source),...placements,...captureSetup(state).objects.filter(o=>!['card','deck'].includes(o.type))]};
   return state;
 }
 export function treeAt(state,x,y){

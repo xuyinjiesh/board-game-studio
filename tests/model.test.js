@@ -35,12 +35,51 @@ test('setup randomness conserves every card and pile size, and uses valid die fa
   assert.ok(result.objects.filter(o=>o.type==='die').every(o=>o.faces.includes(o.value)));
   assert.deepEqual(captureSetup(s).objects,setup.objects);
 });
+
+test('recapturing an opening keeps its options while replacing every placed object',()=>{
+  const s=newGame(()=>.5),options={...s.initialSetup,name:'双人开局',shuffleDecks:true,rollDice:true};
+  const original=structuredClone(options);
+  s.objects[0].x=42;s.objects[0].rotation=90;s.objects[0].faceUp=false;s.objects[0].locked=true;
+  s.objects.find(o=>o.type==='die').value=10;
+  s.objects.find(o=>o.type==='token').value=7;
+  const setup=captureSetup(s,options);
+  assert.equal(setup.name,'双人开局');
+  for(const key of ['randomizeCards','shuffleDecks','rollDice'])assert.equal(setup[key],options[key]);
+  assert.deepEqual(options,original);
+  assert.equal(setup.objects[0].x,42);assert.equal(setup.objects[0].rotation,90);assert.equal(setup.objects[0].faceUp,false);assert.equal(setup.objects[0].locked,true);
+  assert.equal(setup.objects.find(o=>o.type==='die').value,10);assert.equal(setup.objects.find(o=>o.type==='token').value,7);
+  assert.ok(setup.objects.every(o=>!Object.hasOwn(o,'id')));
+  const imported=validateSession(JSON.parse(JSON.stringify({...s,setup})));
+  assert.deepEqual(imported.setup,setup);
+  setup.objects.find(o=>o.type==='deck').cards.pop();
+  assert.notDeepEqual(setup.objects,captureSetup(s).objects);
+});
 test('invalid setup cannot enter a saved session or overwrite the live table',()=>{
   const s=newGame(),baseline=structuredClone(s);
   for(const corrupt of [p=>p.objects[0].x=Infinity,p=>p.objects[0].assetId='missing',p=>p.rollDice='yes',p=>p.objects.find(o=>o.type==='die').value=99]){
     const setup=captureSetup(s);corrupt(setup);
     assert.throws(()=>validateSetup(setup,s));assert.throws(()=>validateSession({...s,setup}));
     assert.throws(()=>applySetup(s,setup));assert.deepEqual(s,baseline);
+  }
+});
+
+test('each deck and piece applies its own fixed or random policy, including locked tokens',()=>{
+  const s=newGame(()=>.5),decks=s.objects.filter(o=>o.type==='deck'),dice=s.objects.filter(o=>o.type==='die'),tokens=s.objects.filter(o=>o.type==='token');
+  decks[0].setupOrder='fixed';decks[1].setupOrder='shuffle';decks[0].faceUp=false;decks[0].setupFace='fixed';
+  dice[0].setupFace='fixed';dice[0].value=10;dice[1].setupFace='random';
+  tokens[0].faceUp=true;tokens[0].setupFace='random';tokens[0].locked=true;
+  tokens[1].faceUp=false;tokens[1].setupFace='fixed';
+  const setup=captureSetup(s);setup.shuffleDecks=true;setup.rollDice=true;
+  const result=applySetup(s,setup,()=>0),high=applySetup(s,setup,()=>.99);
+  assert.deepEqual(result.objects.find(o=>o.id===decks[0].id),undefined);
+  assert.deepEqual(result.objects.filter(o=>o.type==='deck')[0].cards,decks[0].cards);
+  assert.notDeepEqual(result.objects.filter(o=>o.type==='deck')[1].cards,decks[1].cards);
+  assert.equal(result.objects.filter(o=>o.type==='die')[0].value,10);assert.equal(result.objects.filter(o=>o.type==='die')[1].value,2);
+  assert.equal(result.objects.filter(o=>o.type==='token')[0].faceUp,false);
+  assert.equal(high.objects.filter(o=>o.type==='token')[0].faceUp,true);
+  assert.equal(high.objects.filter(o=>o.type==='token')[1].faceUp,false);
+  for(const patch of [{setupOrder:'random'},{setupFace:'invalid'},{faceUp:'false'}]){
+    const invalid=structuredClone(s);Object.assign(invalid.objects.find(o=>o.type==='deck'),patch);assert.throws(()=>validateSession(invalid));
   }
 });
 
@@ -57,9 +96,15 @@ test('each source card has five fruit trees, one clearing, and two actual textur
 });
 test('draw consumes exactly the top card, and stack conserves every card',()=>{
   const s=newGame(),d=s.objects.find(o=>o.type==='deck'&&!o.reserve),last=d.cards.at(-1);
-  const c=drawFromDeck(s,d);assert.equal(c.assetId,last);assert.equal(d.cards.length,5);
+  const c=drawFromDeck(s,d);assert.equal(c.assetId,last);assert.equal(d.cards.length,5);assert.equal(c.faceUp,false);
+  d.setupOrder='shuffle';d.setupFace='fixed';
   const d2=mergeCards(s,[c.id,d.id]);assert.equal(d2.cards.length,6);assert.equal(d2.cards.at(-1),last);
+  assert.equal(d2.setupOrder,'shuffle');assert.equal(d2.setupFace,'fixed');
   while(d2.cards.length)drawFromDeck(s,d2);assert.equal(drawFromDeck(s,d2),null);
+  const up=newGame(),faceUpDeck=up.objects.find(o=>o.type==='deck');faceUpDeck.faceUp=true;
+  assert.equal(drawFromDeck(up,faceUpDeck).faceUp,true);
+  assert.equal(drawFromDeck(up,faceUpDeck,false).faceUp,false);
+  faceUpDeck.faceUp=false;assert.equal(drawFromDeck(up,faceUpDeck,true).faceUp,true);
 });
 test('shuffle is a permutation and does not mutate the input',()=>{const source=[1,2,3,4,5,6];const shuffledCards=shuffled(source,()=>0);assert.deepEqual(source,[1,2,3,4,5,6]);assert.deepEqual([...shuffledCards].sort(),source);assert.notDeepEqual(shuffledCards,source);});
 function simple(){const s=newGame();s.objects=[{...baseObject('card',680,380,1),assetId:'grove-1',faceUp:true}];return s;}

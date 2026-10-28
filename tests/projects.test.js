@@ -2,7 +2,38 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createSession,captureSetup,validateSession,baseObject,applySetup} from '../src/model.js';
 import {createGroveSession,builtinAssets} from '../src/games/grove.js';
-import {createProject,copyProject,migrateSession,makeExhibit,gameFor} from '../src/projects.js';
+import {createProject,copyProject,migrateSession,makeExhibit,gameFor,saveEditorDraft,openEditor} from '../src/projects.js';
+
+test('saving the editor captures positions and individual opening policies directly',()=>{
+  const s={...createProject('grove'),mode:'edit'},decks=s.objects.filter(o=>o.type==='deck');
+  decks[0].x=321;decks[0].setupOrder='fixed';decks[1].setupOrder='shuffle';
+  const token=s.objects.find(o=>o.type==='token');token.faceUp=false;token.setupFace='fixed';token.value=7;
+  const baseline=structuredClone(s),saved=saveEditorDraft(s),exhibit=makeExhibit(saved);
+  assert.deepEqual(s,baseline);assert.equal(saved.setup.randomizeCards,false);
+  assert.equal(saved.setup.objects.find(o=>o.type==='deck').x,321);
+  assert.deepEqual(saved.setup.objects.filter(o=>o.type==='deck').map(o=>o.setupOrder),['fixed','shuffle']);
+  const opening=applySetup(exhibit.session,exhibit.session.setup,()=>0);
+  assert.deepEqual(opening.objects.filter(o=>o.type==='deck')[0].cards,decks[0].cards);
+  assert.notDeepEqual(opening.objects.filter(o=>o.type==='deck')[1].cards,decks[1].cards);
+  assert.equal(opening.objects.find(o=>o.type==='token').faceUp,false);
+  assert.equal(opening.objects.find(o=>o.type==='token').value,7);
+  const imported=migrateSession(JSON.parse(JSON.stringify(saved)));
+  assert.deepEqual(imported.setup,saved.setup);
+});
+
+test('play autosaves keep the authored opening; editing restores its unshuffled layout',()=>{
+  const authored=saveEditorDraft(openEditor(createProject('grove')));
+  const playing={...applySetup(authored,authored.setup,()=>0),mode:'play'};
+  playing.objects[0].x=987;playing.objects.find(o=>o.type==='deck').cards.pop();
+  const saved=saveEditorDraft(playing);
+  assert.deepEqual(saved.setup,authored.setup);assert.equal(saved.objects[0].x,987);
+  const editor=openEditor(saved);
+  assert.equal(editor.mode,'edit');assert.deepEqual(captureSetup(editor).objects,authored.setup.objects);
+  assert.equal(editor.projectId,authored.projectId);
+  const published=makeExhibit(saved);const original=structuredClone(published);
+  editor.objects[0].x=123;saveEditorDraft(editor);
+  assert.deepEqual(published,original);
+});
 
 test('a blank workshop has its own assets and opening, with no game-specific behavior',()=>{
   const blank=createProject('custom','桌游 A'),grove=createProject('grove');

@@ -1,5 +1,6 @@
 import {createSession,baseObject,captureSetup,shuffled,nextZ,assetFor} from '../model.js';
 import {ironHelmAssets} from './iron-helm-assets.js';
+import {ironHelmTableAssets,markerColors,matPoint,syncMarker,dropMarker,equipmentSlot,arrangeIronHelmTable,upgradeIronHelmTable} from './iron-helm-table.js';
 
 export const HEROES=[
   {id:'1',name:'法蓬',health:14,energy:11,capacity:10,gold:3,rations:1,items:['8','12'],skill:'7',proficiency:'敏捷'},
@@ -19,6 +20,7 @@ export function changeValue(s,key,delta,o=marker(s,key)){
   if(!o)throw new Error('缺少状态标记，可撤销桌面修改或开始新一局');
   const h=currentHero(s),max=key==='health'?h.health:key==='energy'?h.energy:limits[key];
   o.value=Math.max(key==='morality'?-5:key==='level'?1:0,Math.min(max,o.value+delta));
+  syncMarker(s,o);
 }
 const statNames={health:'生命',energy:'能量',gold:'金币',rations:'口粮',poison:'中毒',morality:'道德',level:'层数',turn:'回合',eyes:'眼睛',foe:'敌人生命'};
 const glyphs={health:'♥',energy:'✦',gold:'●',rations:'▣',poison:'♦',morality:'⚖',level:'⌂',turn:'◷',eyes:'◉',foe:'☠'};
@@ -47,17 +49,20 @@ export function createIronHelmSession(random=Math.random,heroId='1'){
     objects.push({...baseObject('token',150+i*100,1040,30),kind:`ih-${key}`,name:statNames[key],color:({health:'#ab4d55',energy:'#855487',poison:'#719242',gold:'#b48d3e'})[key]||'#756b5b',value:({health:h.health,energy:h.energy,gold:h.gold,rations:h.rations,level:1})[key]||0,...(key==='turn'?{phase:'ready',potionChoices:h.id==='2'?2:0}:{})});
   }
   for(let i=0;i<3;i++)objects.push({...baseObject('die',1110+i*75,610,35),color:'ivory',name:`战斗骰 ${i+1}`,faces:[1,2,3,4,5,6],value:1});
-  const s={...createSession('铁盔 · 基础版'),gameId:'iron-helm',assets:structuredClone(ironHelmAssets),objects,mode:'play',meta:{description:'独自深入地下城，在每一扇门后做出取舍。仅包含基础版。',players:'1 人',duration:'30–60 分钟',rules:'冒险工具负责抽牌、计数与换层整理。战斗、装备槽位、负重、剧情选项和卡牌特殊效果请按牌面结算；资源可在冒险手册中调整。'}};
+  const s={...createSession('铁盔 · 基础版'),gameId:'iron-helm',ironHelmTableVersion:2,assets:structuredClone([...ironHelmAssets,...ironHelmTableAssets]),objects,mode:'play',meta:{description:'独自深入地下城，在每一扇门后做出取舍。仅包含基础版。',players:'1 人',duration:'30–60 分钟',rules:'冒险工具负责抽牌、计数与换层整理。战斗、装备槽位、负重、剧情选项和卡牌特殊效果请按牌面结算；资源可在规则手册中调整。'}};
+  arrangeIronHelmTable(s);
   s.settings.theme='night';s.settings.snap=false;
   s.initialSetup={...captureSetup(s),name:`铁盔基础版 · ${h.name}`,shuffleDecks:true};
   return s;
 }
 function putCard(s,assetId,x,y,role,faceUp=true){
-  const o={...baseObject('card',x,y,nextZ(s)),assetId,faceUp,ihRole:role};s.objects.push(o);return o;
+  const group=assetFor(s,assetId)?.group;
+  const o={...baseObject('card',x,y,nextZ(s)),assetId,faceUp,ihRole:role,...(group==='blessing'?{}:group==='dungeon'?{width:150,height:210}:{width:140,height:196})};s.objects.push(o);return o;
 }
-function takeTop(s,role,x=1030,y=550,faceUp=true){
+function takeTop(s,role,x=735,y=530,faceUp=true){
   const d=pile(s,role);if(!d?.cards.length)throw new Error('这个牌堆已空');
-  return putCard(s,d.cards.pop(),x,y,role==='blessing'?'blessing-owned':role==='plot'?'plot-active':'drawn',faceUp);
+  const p=matPoint(s,x,y);
+  return putCard(s,d.cards.pop(),p.x,p.y,role==='blessing'?'blessing-owned':role==='plot'?'plot-active':'drawn',faceUp);
 }
 function discard(s,o,role,faceUp=false){
   const d=pile(s,role);if(!d)throw new Error('缺少弃牌区，请恢复初始设置');
@@ -70,7 +75,7 @@ export function explore(s){
   if(value(s,'health')<=0||value(s,'poison')>=value(s,'health'))throw new Error('冒险者已倒下，请开始新一局或撤销上一步');
   if(value(s,'turn')>=8)throw new Error('本层已完成，请进行换层结算');
   if((pile(s,'dungeon')?.cards.length||0)<2)throw new Error('地城牌不足两张，请归还误拿的牌或撤销');
-  const a=takeTop(s,'dungeon',370,550,false),b=takeTop(s,'dungeon',590,550,false);
+  const a=takeTop(s,'dungeon',603,518,false),b=takeTop(s,'dungeon',738,518,false);
   a.ihRole='door-a';b.ihRole='door-b';p.phase='choose';
 }
 export function revealDoor(s,side){
@@ -101,6 +106,7 @@ export function nextLevel(s,random=Math.random){
   if(value(s,'rations'))changeValue(s,'rations',-1);else changeValue(s,'health',-3);
   changeValue(s,'poison',Math.floor(value(s,'poison')/2));
   progress(s).value=0;
+  syncMarker(s,progress(s));
   if(value(s,'health')<=0||value(s,'poison')>=value(s,'health'))return '换层消耗后冒险者倒下，游戏结束。';
   changeValue(s,'level',1);takeTop(s,'plot');
   return '已消耗口粮、结算中毒并进入下一层；请结算新剧情。';
@@ -123,7 +129,8 @@ export function takeFromCatalog(s,assetId){
     p.potionChoices--;
   }else throw new Error('只能在这里购买初始装备、学习技能或选择初始药剂');
   d.cards.splice(d.cards.indexOf(assetId),1);
-  putCard(s,assetId,1000+(s.objects.filter(o=>o.ihRole==='inventory').length%3)*38,810+(s.objects.filter(o=>o.ihRole==='inventory').length%4)*36,a.group==='skill'?'learned':'inventory');
+  const position=matPoint(s,...(a.group==='skill'?[1450,150]:equipmentSlot(a.code)));
+  putCard(s,assetId,position.x,position.y,a.group==='skill'?'learned':'inventory');
 }
 export function act(s,action,arg,selected=[],random=Math.random){
   if(action==='explore')explore(s);
@@ -135,7 +142,7 @@ export function act(s,action,arg,selected=[],random=Math.random){
   else if(action==='take')takeFromCatalog(s,arg);
   else if(action==='draw'){
     if(!['enemy','loot','plot','potion','blessing'].includes(arg))throw new Error('无效牌堆');
-    takeTop(s,arg,arg==='enemy'?850:1030,arg==='blessing'?750:550,arg!=='blessing');
+    takeTop(s,arg,arg==='enemy'?600:735,arg==='blessing'?705:530,arg!=='blessing');
   }else if(action==='discard'){
     const cards=s.objects.filter(o=>selected.includes(o.id)&&o.type==='card'&&!o.locked);
     if(!cards.length)throw new Error('先选中要归入弃牌区的卡牌');
@@ -150,32 +157,36 @@ export function act(s,action,arg,selected=[],random=Math.random){
   return '';
 }
 const button=(action,text,arg='',disabled=false)=>`<button data-game-action="${action}" data-game-value="${e(arg)}" ${action==='adjust'?`aria-label="${Number(arg.split(':')[1])>0?'增加':'减少'}${statNames[arg.split(':')[0]]}"`:''} ${disabled?'disabled':''}>${text}</button>`;
-export function toolbar(s){
+export function toolbar(){
+  return `<div class="ih-toolbar"><span class="ih-title"><span aria-hidden="true">⚔</span> 铁盔</span>${button('journal','规则手册')}</div>`;
+}
+function turnActions(s){
   const phase=progress(s)?.phase||'ready',turn=value(s,'turn');
-  const hint=phase==='choose'?'选择先翻哪张门。':phase==='first'?'保留并执行第 1 段，或放弃换门。':phase==='second'?'执行第 2 段，完成效果后再结束回合。':turn===8?'本层完成；换层将消耗口粮并结算中毒。':'右键放大牌面 · D 掷选中骰子 · Ctrl+Z 撤销';
-  return `<div class="ih-toolbar"><button data-game-action="journal" class="ih-title"><span>⚔</span> 铁盔 <small>第 ${value(s,'level')} 层 · ${turn}/8</small></button><span class="ih-vitals">♥ ${value(s,'health')} <i>✦ ${value(s,'energy')}</i></span>${phase==='ready'?(turn===8?button('next-level','换层结算'):button('explore','抽两张门')):phase==='choose'?button('reveal','先看左门','a')+button('reveal','先看右门','b'):(phase==='first'?button('switch','放弃，换门'):'')+button('finish','结算完毕')} ${button('journal','冒险手册')}</div><p class="ih-toolbar-hint">${hint}</p>`;
+  return `<div class="ih-buttons">${phase==='ready'?(turn===8?button('next-level','换层结算'):button('explore','抽两张门')):phase==='choose'?button('reveal','先看左门','a')+button('reveal','先看右门','b'):(phase==='first'?button('switch','放弃，换门'):'')+button('finish','结算完毕')}</div>`;
 }
 export function journal(s){
   const h=currentHero(s),p=progress(s),blessings=s.objects.filter(o=>o.ihRole==='blessing-owned').length;
-  return `<span class="section-eyebrow">IRON HELM · BASE GAME</span><h2>${h.name}的冒险手册</h2><p class="modal-lead">${h.proficiency}专精 · 负重上限 ${h.capacity} · 祝福 ${blessings} 枚。资源按钮用于记录牌面结算。</p>${value(s,'health')<=0||value(s,'poison')>=value(s,'health')?'<p class="ih-alert">冒险者已倒下。可撤销上一步或开始新一局。</p>':value(s,'eyes')>=10?'<p class="ih-alert">已达到 10 只眼睛。结算当前剧情后，揭晓首领、神圣干预，再进行最终战斗。</p>':''}<div class="ih-stats">${Object.keys(statNames).map(key=>`<div><span>${glyphs[key]} ${statNames[key]}</span><div>${button('adjust','−',key+':-1')}<strong>${value(s,key)}</strong>${button('adjust','＋',key+':1')}</div></div>`).join('')}</div><div class="ih-section"><h3>牌库与归档</h3><div class="ih-buttons">${['enemy','loot','plot','potion','blessing'].map(group=>button('draw',`抽${({enemy:'敌人',loot:'战利品',plot:'剧情',potion:'药剂',blessing:'祝福'})[group]} · ${pile(s,group)?.cards.length||0}`,group)).join('')}${button('discard','归档选中的卡牌')}${button('catalog','装备 / 技能牌库')}${button('heroes','选角色并重新开局')}</div><p class="subtle-note">选中桌面卡牌后归档：敌人放入墓地供学习技能；剧情归档时累计眼睛。战利品和药剂归入各自弃牌区。祝福抽出后保持背面朝上。</p>${p?.potionChoices?`<p class="ih-alert">炼金术：还需在牌库选择 ${p.potionChoices} 瓶初始药剂。</p>`:''}</div><div class="ih-section"><h3>当前地城 · ${p?.phase==='second'?'执行牌面第 2 段':p?.phase==='first'?'执行牌面第 1 段':p?.phase==='choose'?'选择先看哪一扇门':'准备探索'}</h3><p>抽两张背面朝上的门，翻开一张。可保留并结算第 1 段，或放弃并翻开另一张、结算第 2 段。完成效果后再点击「结算完毕」。每层 8 回合。</p><p>敌人攻击：2d6 的差值加基础伤害；双骰相同则未命中。你的攻击：花费 1–3 能量掷等量骰子，合计后加牌面加成；徒手为 1 点伤害且不耗能。装备、药剂和技能效果由玩家执行。</p><div class="ih-buttons"><button data-action="rules">完整玩法速查</button><button data-action="help">桌面操作</button><button data-action="undo">撤销上一步</button></div></div>`;
+  return `<span class="section-eyebrow">IRON HELM · BASE GAME</span><h2>铁盔 · 规则手册</h2><p class="modal-lead">${h.name} · ${h.proficiency}专精 · 负重上限 ${h.capacity} · 祝福 ${blessings} 枚。方形标记可拖到轨道刻度，或在标记上滚轮调整；也可使用下方按钮记录。</p>${value(s,'health')<=0||value(s,'poison')>=value(s,'health')?'<p class="ih-alert">冒险者已倒下。可撤销上一步或开始新一局。</p>':value(s,'eyes')>=10?'<p class="ih-alert">已达到 10 只眼睛。结算当前剧情后，揭晓首领、神圣干预，再进行最终战斗。</p>':''}<div class="ih-section"><h3>第 ${value(s,'level')} 层 · ${value(s,'turn')}/8 回合</h3>${turnActions(s)}</div><div class="ih-stats">${Object.keys(statNames).map(key=>`<div><span>${glyphs[key]} ${statNames[key]}</span><div>${button('adjust','−',key+':-1')}<strong>${value(s,key)}</strong>${button('adjust','＋',key+':1')}</div></div>`).join('')}</div><div class="ih-section"><h3>牌库与归档</h3><div class="ih-buttons">${['enemy','loot','plot','potion','blessing'].map(group=>button('draw',`抽${({enemy:'敌人',loot:'战利品',plot:'剧情',potion:'药剂',blessing:'祝福'})[group]} · ${pile(s,group)?.cards.length||0}`,group)).join('')}${button('discard','归档选中的卡牌')}${button('catalog','装备 / 技能牌库')}${button('heroes','选角色并重新开局')}</div><p class="subtle-note">选中桌面卡牌后归档：敌人放入墓地供学习技能；剧情归档时累计眼睛。战利品和药剂归入各自弃牌区。祝福抽出后保持背面朝上。</p>${p?.potionChoices?`<p class="ih-alert">炼金术：还需在牌库选择 ${p.potionChoices} 瓶初始药剂。</p>`:''}</div><div class="ih-section"><h3>当前地城 · ${p?.phase==='second'?'执行牌面第 2 段':p?.phase==='first'?'执行牌面第 1 段':p?.phase==='choose'?'选择先看哪一扇门':'准备探索'}</h3><p>抽两张背面朝上的门，翻开一张。可保留并结算第 1 段，或放弃并翻开另一张、结算第 2 段。完成效果后再点击「结算完毕」。每层 8 回合。</p><p>敌人攻击：2d6 的差值加基础伤害；双骰相同则未命中。你的攻击：花费 1–3 能量掷等量骰子，合计后加牌面加成；徒手为 1 点伤害且不耗能。装备、药剂和技能效果由玩家执行。</p><div class="ih-buttons"><button data-action="rules">完整玩法速查</button><button data-action="help">桌面操作</button><button data-action="undo">撤销上一步</button></div></div>`;
 }
 export function catalog(s){
   const choices=s.assets.filter(a=>['trapping','skill',...(progress(s)?.potionChoices?['potion']:[])].includes(a.group)&&pile(s,a.group)?.cards.includes(a.id));
-  return `<span class="section-eyebrow">THE SUPPLY</span><h2>装备与技能</h2><p class="modal-lead">初始装备按金币购买；技能使用 3 张同专精或 5 张其他专精的墓地敌人卡。负重、槽位和卡牌效果请自行检查。</p><div class="ih-catalog">${choices.map(a=>`<div><img src="${e(a.front)}" alt="${e(a.name)}"><strong>${e(a.name)}</strong><small>${a.group==='trapping'?`${costs[Number(a.code)-1]} 金币 · 负重 ${weights[Number(a.code)-1]}`:a.group==='skill'?`技能 · ${Number(a.code)<=4?'心智':Number(a.code)<=8?'敏捷':'力量'}`:'炼金术初始药剂'}</small>${button('take',a.group==='skill'?'学习':a.group==='trapping'?'购买':'选取',a.id)}</div>`).join('')}</div><button class="full-width quiet" data-game-action="journal">返回冒险手册</button>`;
+  return `<span class="section-eyebrow">THE SUPPLY</span><h2>装备与技能</h2><p class="modal-lead">初始装备按金币购买；技能使用 3 张同专精或 5 张其他专精的墓地敌人卡。负重、槽位和卡牌效果请自行检查。</p><div class="ih-catalog">${choices.map(a=>`<div><img src="${e(a.front)}" alt="${e(a.name)}"><strong>${e(a.name)}</strong><small>${a.group==='trapping'?`${costs[Number(a.code)-1]} 金币 · 负重 ${weights[Number(a.code)-1]}`:a.group==='skill'?`技能 · ${Number(a.code)<=4?'心智':Number(a.code)<=8?'敏捷':'力量'}`:'炼金术初始药剂'}</small>${button('take',a.group==='skill'?'学习':a.group==='trapping'?'购买':'选取',a.id)}</div>`).join('')}</div><button class="full-width quiet" data-game-action="journal">返回规则手册</button>`;
 }
 export function heroes(){return `<span class="section-eyebrow">CHOOSE YOUR HERO</span><h2>谁将踏入地下城？</h2><p class="modal-lead">选择角色将重新布置牌局、初始装备与技能。当前进度可通过撤销恢复。</p><div class="ih-heroes">${HEROES.map(h=>`<div><img src="/assets/iron-helm/hero-${h.id}.webp" alt="${h.name}"><strong>${h.name}</strong><small>♥ ${h.health} · ✦ ${h.energy} · 负重 ${h.capacity}</small>${button('choose-hero','以此角色开局',h.id)}</div>`).join('')}</div>`;}
 
 export const ironHelm={
+  openingProfiles:()=>HEROES.map(h=>({id:`ih-hero-${h.id}`,name:h.name,setup:createIronHelmSession(()=>.5,h.id).initialSetup})),
+  openingProfileId:s=>`ih-hero-${currentHero(s).id}`,
   id:'iron-helm',title:'铁盔 · 基础版',subtitle:'IRON HELM',tagline:'再探一扇门，再赌一次命运。',players:'1 人',duration:'30–60 分钟',create:createIronHelmSession,
-  toolbar,journal,catalog,heroes,act,startView:'heroes',
+  toolbar,journal,catalog,heroes,act,prepareSession:upgradeIronHelmTable,onTokenDrop(s,o){dropMarker(s,o,(s,o,delta)=>changeValue(s,o.kind.slice(3),delta,o));},startView:'heroes',
   adjustToken(s,o,delta){
     const key=o.kind?.slice(3);
     if(o.kind?.startsWith('ih-')&&Object.hasOwn(statNames,key))changeValue(s,key,delta,o);
     else o.value=Math.max(-999,Math.min(999,o.value+delta));
   },
-  tokenIcon(kind,o){const key=kind.slice(3);return `<span class="ih-token"><small>${glyphs[key]||'✦'} ${statNames[key]||''}</small><b>${Number.isFinite(o?.value)?o.value:0}</b></span>`;},
-  tokens:Object.entries(statNames).map(([key,name])=>({kind:`ih-${key}`,name,color:'#756b5b',description:'在冒险手册中调整，随桌面保存。'})),
-  zones:[{className:'ih-zone',label:'探索 · 两扇门',subtitle:'保留第一张，或冒险翻开第二张',box:[260,420,440,260]},{className:'ih-zone',label:'当前敌人',subtitle:'战斗与伤害按牌面结算',box:[720,420,260,260]},{className:'ih-zone ih-zone-line',label:'冒险者与装备',subtitle:'主手 / 副手 / 头部 / 身体 · 请遵守角色负重',box:[65,696,850,35]}],
+  tokenIcon(kind,o){const key=kind.slice(3);return `<span class="ih-token ${['turn','eyes'].includes(key)?'ih-token-counter':''}" title="${statNames[key]||''}"><img src="/assets/iron-helm/marker-${e(key)}.webp" alt="" draggable="false"><small>${glyphs[key]||'✦'} ${statNames[key]||''}</small><b>${Number.isFinite(o?.value)?o.value:0}</b></span>`;},
+  tokens:Object.entries(statNames).map(([key,name])=>({kind:`ih-${key}`,name,color:markerColors[key],value:key==='level'?1:0,width:['turn','eyes'].includes(key)?48:28,height:['turn','eyes'].includes(key)?48:28,assetId:`ih-marker-${key}`,description:'方形标记 · 拖至轨道刻度或滚轮调整，随桌面保存。'})),
+  zones:[],
   rules:{title:'一人，一盔，一座地下城。',credit:'Jason Glover / Grey Gnome Games · 中文素材：假装不在意汉化、老方分享 · 仅基础版',pdf:'/assets/iron-helm/rules-en.pdf',links:[['官方规则附录','/assets/iron-helm/appendix-en.pdf']],steps:[
     ['选择角色','按角色卡取得初始生命、能量、口粮、金币、装备及技能。初始金币可购买初始装备。索塔布的炼金术允许自选两瓶药剂。始于地下城第 1 层、道德 0。'],
     ['探索地城','每回合抽两张门并保持背面，任意翻一张。保留它则结算第 1 段；或弃掉它并翻另一张，必须结算第 2 段。营地、商人、祭坛和空地按整张卡处理。未看的门不展示。'],

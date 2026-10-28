@@ -2,19 +2,15 @@
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#334c3d"><title>桌间 Tablecraft · 桌游工坊</title><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23334c3d'/%3E%3Cpath d='M16 24 32 15 48 24v20l-16 9-16-9Z' fill='none' stroke='%23e7c489' stroke-width='4'/%3E%3Cpath d='m16 24 16 9 16-9M32 33v20' fill='none' stroke='%23e7c489' stroke-width='4'/%3E%3C/svg%3E"><link rel="stylesheet" href="/src/style.css"><link rel="stylesheet" href="/src/shell.css"><link rel="stylesheet" href="/src/plaza.css"></head>
 <body>
-<section id="plaza" aria-label="展示广场">
-  <aside class="plaza-sidebar"><a class="plaza-brand" href="/" aria-label="桌间展示广场"><span>⬡</span><strong>桌间<small>TABLECRAFT</small></strong></a><p class="plaza-side-caption">一张桌面，无限种可能。</p><nav aria-label="广场导航"><button data-plaza-filter="all" class="active">◈ <span>展示广场</span></button><button data-plaza-filter="mine">▦ <span>我的工坊</span><b id="plaza-project-count">0</b></button><button data-plaza-filter="examples">✳ <span>示例游戏</span></button><button data-plaza-filter="exhibits">⚑ <span>我的展示</span></button></nav><div class="plaza-sidebar-bottom"><button data-plaza-filter="archived">▱ 已归档</button><button data-action="import-session">↥ 导入游戏项目</button><div><i></i> 本地创作空间</div><p>作品与进度保存在这台设备的浏览器中。</p></div></aside>
-  <main class="plaza-main"><header class="plaza-top"><span>THE TABLE IS OPEN</span><div><label class="plaza-search">⌕ <input id="plaza-search" type="search" placeholder="寻找一个游戏…" aria-label="搜索游戏"></label><button class="plaza-new" data-action="new-project">＋ 新建游戏</button></div></header>
-    <section class="plaza-hero"><div class="plaza-hero-copy"><div class="plaza-eyebrow"><i></i> 桌游工坊 · 本地展示广场</div><h1>把好游戏，<br>摆上桌<span>。</span></h1><p>从一张卡牌开始，到一整个世界。<br>制作、摆放、游玩，让灵感在桌面发生。</p><button data-plaza-filter="examples" class="plaza-hero-link">挑一个游戏开始 <span>↗</span></button></div><div class="plaza-hero-art" id="plaza-featured" aria-label="精选示例游戏"></div></section>
-    <section class="plaza-library"><div class="plaza-library-heading"><div><span class="plaza-eyebrow">MADE TO BE PLAYED</span><h2 id="plaza-section-title">值得摆上桌的好游戏</h2></div><span id="plaza-result-count"></span></div><div class="plaza-filters" aria-label="游戏分类"><button data-plaza-filter="all" class="active">全部</button><button data-plaza-filter="examples">示例游戏</button><button data-plaza-filter="exhibits">我的展示</button><button data-plaza-filter="mine">我的项目</button></div><p id="plaza-loading" role="status">正在打开本地项目库…</p><div id="plaza-grid" class="plaza-grid"></div></section>
-    <footer class="plaza-footer"><span>为每一个想做游戏的人，留一张桌面。</span><span>TABLECRAFT · LOCAL STUDIO</span></footer>
-  </main>
+<section id="plaza" aria-label="广场与本地草稿">
+  <header class="plaza-header"><a class="plaza-brand" href="/" aria-label="桌间广场"><span>⬡</span><strong>桌间</strong></a><nav aria-label="广场导航"><button data-plaza-filter="all" class="active">广场</button><button data-plaza-filter="mine">本地草稿 <b id="plaza-project-count">0</b></button></nav><div class="plaza-actions"><button data-action="import-session" class="quiet">导入文件</button><button class="plaza-new" data-action="new-project">＋ 新建游戏</button></div></header>
+  <main class="plaza-main"><div class="plaza-library-heading"><div><h1 id="plaza-section-title">广场</h1><p id="plaza-section-note">选择一个游戏，开始游玩或编辑。</p></div><label class="plaza-search">⌕ <input id="plaza-search" type="search" placeholder="搜索游戏" aria-label="搜索游戏"></label></div><p id="plaza-loading" role="status">正在读取…</p><div id="plaza-grid" class="plaza-grid"></div><p class="plaza-local-note">保存在当前浏览器 · 广场作品与本地草稿独立保存</p></main>
 </section>
 <div id="app" data-mode="play" hidden>
   <header class="topbar">
     <button class="brand" data-action="plaza" aria-label="返回展示广场"><span class="brand-mark">⬡</span><strong>桌间<span>TABLECRAFT</span></strong><i></i><span class="brand-sub">桌游工坊</span></button>
-    <div class="project-name"><span class="status-dot"></span><span>我的游戏</span><span class="local-badge">本地</span></div>
-    <div class="header-actions"><span id="save-status">已自动保存</span><button data-action="undo" class="icon-button" title="撤销 Ctrl+Z" aria-label="撤销">↶</button><button data-action="redo" class="icon-button" title="重做 Ctrl+Shift+Z" aria-label="重做">↷</button><button data-action="export" class="quiet">导出 <span>↗</span></button><button data-mode="play" class="play-button" title="进入游玩模式 Ctrl+E">▷ 开始游玩</button></div>
+    <div class="project-name"><span class="status-dot"></span><span>我的游戏</span><span class="local-badge">本地</span><span id="active-profile-name" class="local-badge"></span></div>
+    <div class="header-actions"><span id="save-status">已自动保存</span><button data-action="undo" class="icon-button" title="撤销 Ctrl+Z" aria-label="撤销">↶</button><button data-action="redo" class="icon-button" title="重做 Ctrl+Shift+Z" aria-label="重做">↷</button><button data-action="save-draft" class="quiet">保存草稿</button><button data-action="publish" class="quiet">导出到广场 ↗</button><button data-mode="play" class="play-button" title="进入游玩模式 Ctrl+E">▷ 开始游玩</button></div>
   </header>
   <div class="workspace">
     <aside class="library drawer" id="assets-drawer" aria-label="资产抽屉" aria-hidden="true" inert>
@@ -29,36 +25,23 @@
         <div id="selection-marquee" hidden aria-hidden="true"></div>
         <div class="table-atmosphere"></div>
         <div id="game-controls" aria-label="游戏专用操作" hidden></div>
-        <div class="scene" id="scene"><div class="surface"></div><div class="grid-overlay" id="grid"></div><div id="game-zones"></div><div id="objects"></div></div>
+        <div class="scene" id="scene"><div class="surface"></div><div class="grid-overlay" id="grid"></div><div id="game-zones"></div><div id="objects"></div><div id="card-snap-preview" hidden aria-hidden="true"><span></span></div></div>
+        <div id="deck-draw-tools" role="group" aria-label="从牌顶拿一张牌" hidden><button data-action="draw-up" title="指定正面朝上拿取顶牌">▣ 正面拿一张</button><button data-action="draw-down" title="指定背面朝上拿取顶牌">▧ 背面拿一张</button></div>
         <div class="table-bottom"><div class="gesture-hint"><kbd>拖动</kbd> 移动物件 <span>·</span> <kbd>F</kbd> 翻面 <span>·</span> <kbd>空格＋拖动</kbd> 移动画布</div><div class="view-tools"><button data-action="sound" title="切换音效" id="sound-button">♪</button><button data-action="grid" title="切换网格" id="grid-button">▦</button><i></i><button data-action="zoom-out" title="缩小">−</button><span id="zoom-label">100%</span><button data-action="zoom-in" title="放大">＋</button><button data-action="fit" title="适应桌面">⌗</button></div></div>
       </div>
     </main>
     <aside class="settings-drawer drawer" id="settings-drawer" aria-label="桌面设置抽屉" aria-hidden="true" inert>
       <div class="drawer-heading"><div><span class="section-eyebrow">MAKE ROOM FOR PLAY</span><h2>桌面设置</h2></div><button data-action="close-drawer" class="drawer-close" aria-label="关闭桌面设置抽屉">×</button></div>
-      <div class="drawer-scroll"><div class="table-toolbar"><div><span class="tiny-label">正在编辑</span><h2>我的游戏</h2></div></div><div class="table-status"><span id="table-mode-label">编辑桌面</span><span id="table-item-count"></span></div><div id="table-settings-content"></div><div class="drawer-command-list"><button data-action="fit">⌗ <span>适应桌面</span><kbd>0</kbd></button><button data-action="rules">▤ <span>游戏规则</span><span>↗</span></button><button data-action="help">? <span>操作与快捷键</span><span>↗</span></button><button data-action="new-game">↻ 新一局</button></div></div>
+      <div class="drawer-scroll"><div class="table-toolbar"><div><span class="tiny-label">正在编辑</span><h2>我的游戏</h2></div></div><div class="table-status"><span id="table-mode-label">编辑桌面</span><span id="table-item-count"></span></div><div id="table-settings-content"></div><div class="drawer-command-list"><button data-action="fit">⌗ <span>适应桌面</span><kbd>0</kbd></button><button data-action="rules">▤ <span>游戏规则</span><span>↗</span></button><button data-action="help">? <span>操作与快捷键</span><span>↗</span></button><button data-action="download-session">下载备份文件 ↗</button></div></div>
     </aside>
-    <aside class="setup-drawer drawer" id="setup-drawer" aria-label="初始设置抽屉" aria-hidden="true" inert>
-      <div class="drawer-heading"><div><span class="section-eyebrow">SET THE FIRST SCENE</span><h2>初始设置 <small>setup</small></h2></div><button data-action="close-drawer" class="drawer-close" aria-label="关闭初始设置抽屉">×</button></div>
-      <div class="drawer-scroll setup-scroll">
-        <p class="setup-intro">定义每一局从哪里开始。</p><p id="setup-status" role="status"></p>
-        <div class="setup-tools"><button data-action="capture-setup">从当前桌面生成</button><button data-action="default-setup">项目默认设置</button></div>
-        <label class="setup-label" for="setup-source">初始设置配置 · JSON</label>
-        <textarea id="setup-source" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="setup-error setup-guide"></textarea>
-        <p id="setup-error" role="alert"></p>
-        <div class="setup-buttons"><button class="primary-button" data-action="save-setup">保存初始设置</button><button data-action="preview-setup">试运行</button></div>
-        <p class="subtle-note">保存不改变当前桌面；试运行会替换摆放，可撤销。未保存的修改只用于试运行。</p>
-        <details id="setup-guide"><summary>配置说明与资产编号</summary><p>name：设置名称。objects：初始物件列表，可从桌面生成后修改。</p><p>randomizeCards：将所有单牌和牌堆中的卡重新随机分配到现有位置，保留每堆数量。shuffleDecks：分别洗匀每个牌堆。rollDice：随机设置每颗骰子的骰面。填写 true 开启，false 关闭。</p><p>物件的 x / y 是中心位置；z 越大越靠上；rotation 是角度；locked 控制锁定。卡牌使用 assetId 和 faceUp；牌堆使用 cards 数组，最后一张为顶牌；骰子使用 color、faces、value。保留生成的其余字段即可。</p><div id="setup-assets"></div></details>
-        <button class="text-button" data-action="clear-setup">停用自定义 setup，恢复项目默认开局</button>
-      </div>
-    </aside>
-  </div>
-  <nav class="editor-dock" aria-label="编辑工具"><button data-drawer="setup" aria-controls="setup-drawer" aria-expanded="false" title="初始设置"><span>⚑</span><small>初始设置</small></button><button data-drawer="assets" aria-controls="assets-drawer" aria-expanded="false" title="资产库"><span>▦</span><small>资产</small></button><button data-drawer="settings" aria-controls="settings-drawer" aria-expanded="false" title="桌面设置"><span>☷</span><small>桌面</small></button></nav>
+    <aside class="object-drawer drawer" id="object-drawer" aria-label="物件属性" aria-hidden="true" inert><div class="drawer-heading"><h2>物件属性</h2><button data-action="close-object" class="drawer-close" aria-label="关闭物件属性">×</button></div><div id="inspector-content" class="drawer-scroll"></div></aside>  </div>
+  <nav class="editor-dock" aria-label="编辑工具"><button data-action="manage-profiles" title="角色开局方案"><span>♧</span><small>开局方案</small></button><button data-drawer="assets" aria-controls="assets-drawer" aria-expanded="false" title="资产库"><span>▦</span><small>资产</small></button><button data-drawer="settings" aria-controls="settings-drawer" aria-expanded="false" title="桌面设置"><span>☷</span><small>桌面</small></button></nav>
   <button id="mode-toggle" data-mode="edit" title="编辑桌面 · Ctrl+E" aria-label="进入编辑模式 Ctrl+E"><span>◇</span> 编辑桌面 <kbd>Ctrl E</kbd></button>
   <button id="play-plaza" data-action="plaza" aria-label="返回展示广场">‹ 广场</button>
   <button id="play-new-game" data-action="new-game" title="开始新一局">↻ 新一局</button>
   <button id="play-reset-view" data-action="reset-view" title="恢复开局时的缩放与位置" aria-label="回到初始视野">⌖ 回到初始视野</button>
 </div>
-<div id="inspector-content" hidden></div>
+
 <div id="toast" role="status" aria-live="polite"></div>
 <dialog id="modal"><button class="modal-close icon-button" data-action="close-modal" aria-label="关闭">×</button><div id="modal-content"></div></dialog>
 <input type="file" id="asset-input" accept="image/png,image/jpeg,image/webp" multiple hidden><input type="file" id="session-input" accept="application/json,.json" hidden>
