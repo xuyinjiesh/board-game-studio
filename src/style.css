@@ -42,6 +42,9 @@
 @media(max-width:760px){#game-controls{left:10px;top:64px;max-width:calc(100% - 20px)}.ih-toolbar{gap:5px;padding:5px 7px}.ih-toolbar button{padding:6px 8px;font-size:11px}.ih-vitals{display:none}.ih-toolbar .ih-title{font-size:12px}.ih-title small{font-size:10px;margin-left:4px}.ih-heroes,.ih-catalog{grid-template-columns:repeat(2,minmax(0,1fr))}.ih-stats{gap:7px}.ih-stats>div{padding:6px;gap:3px}.ih-stats>div>span{font-size:10px}.ih-stats>div>div{gap:3px}.ih-stats button{width:26px}.ih-stats strong{font-size:16px;min-width:20px}}
 
 .ih-toolbar-hint{font-size:10px;color:#cdbb9cbd;margin:8px 10px;text-shadow:0 1px 3px #000}
+.ih-rulebooks{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:14px}
+.ih-rulebooks a{font-size:14px;text-decoration:underline;text-underline-offset:3px}
+.ih-rulebooks small{display:block;margin-top:5px;font-size:11px;line-height:1.6;opacity:.7}
 #app .scene[data-game="iron-helm"] .ih-zone{display:flex;position:absolute;align-items:center;justify-content:flex-end;flex-direction:column;padding:12px;border:1px dashed #d3b77c2b;border-radius:12px;color:#d1bd9855;pointer-events:none}
 #app .scene[data-game="iron-helm"] .ih-zone>span{font-size:15px;letter-spacing:2px}#app .scene[data-game="iron-helm"] .ih-zone>small{font-size:11px;letter-spacing:0;margin-top:7px;color:#d1bd9850}#app .scene[data-game="iron-helm"] .ih-zone-line{border:0;border-top:1px solid #d3b77c24;border-radius:0;align-items:flex-start;justify-content:flex-start;padding:12px 0}
 
@@ -92,11 +95,9 @@
 #app .table-object.deal.generated-pile{border:0;background:none;box-shadow:none}
 #deck-draw-tools{position:absolute;z-index:2000003;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;width:max-content;max-width:calc(100% - 16px);padding:7px;border:1px solid #b7c79b88;border-radius:10px;background:#263c2ff5;color:#f3efd9;box-shadow:0 5px 20px #10251d66}
 #deck-draw-tools[hidden]{display:none}
-.deck-scope-switch,.deck-scope-actions{display:flex;align-items:center;gap:5px}
-.deck-scope-switch{padding-bottom:5px;border-bottom:1px solid #bdcba333}
+.deck-scope-actions{display:flex;align-items:center;gap:5px}
 #deck-draw-tools button{font-size:12px;border-radius:5px;padding:6px 9px;white-space:nowrap;color:inherit}
-#deck-draw-tools button:hover:not(:disabled),.deck-scope-switch button[aria-pressed="true"]{background:#e4d5a52c;color:#fff0bd}
-.deck-scope-switch>kbd{margin-left:auto;margin-right:6px;font-size:10px}
+#deck-draw-tools button:hover:not(:disabled){background:#e4d5a52c;color:#fff0bd}
 .deck-scope-actions kbd{font-size:9px;margin-left:4px}
 dialog:has(.deck-search-list){width:640px}
 .deck-search-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));list-style:none;gap:18px 12px;margin:0;padding:4px;max-height:60dvh;overflow:auto;scrollbar-width:thin}

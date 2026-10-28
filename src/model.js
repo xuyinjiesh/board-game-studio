@@ -6,6 +6,7 @@ export const COLOR_NAMES = {orange:'橙色',lemon:'黄色',lime:'绿色',ivory:'
 export const DEFAULT_SCATTER = 1;
 export function uid(){return globalThis.crypto?.randomUUID?.() || `id-${Date.now()}-${Math.random().toString(36).slice(2)}`;}
 export function shuffled(items, random=Math.random){const a=[...items];for(let i=a.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+export function rollDieValue(die,random=Math.random){return die.faces[Math.floor(random()*die.faces.length)];}
 export function baseObject(type,x,y,z=1){return {id:uid(),type,x,y,z,rotation:0,locked:false};}
 export const canMoveObject=(o,mode='play')=>!!o&&!o.locked&&(mode==='edit'||!o.fixedPosition);
 export const deckCapacity=o=>o.maxCards??500;
@@ -43,7 +44,7 @@ export function createSession(name='未命名游戏'){
 }
 export function assetFor(state,id){return state.assets.find(a=>a.id===id);}
 export function nextZ(state){return Math.max(1,...state.objects.map(o=>o.z))+1;}
-export function dimensions(state,o){if(['card','deck','deal'].includes(o.type)) {const a=assetFor(state,o.type==='deck'?o.cards.at(-1):o.assetId);return {w:o.width||a?.width||CARD_W,h:o.height||a?.height||CARD_H};}if(o.type==='board')return {w:o.width||640,h:o.height||440};if(o.type==='die')return {w:50,h:50};return {w:o.width||58,h:o.height||58};}
+export function dimensions(state,o){if(['card','deck','deal'].includes(o.type)) {const a=assetFor(state,o.type==='deck'?o.cards.at(-1):o.assetId);return {w:o.width||a?.width||CARD_W,h:o.height||a?.height||CARD_H};}if(o.type==='board')return {w:o.width||640,h:o.height||440};if(o.type==='die')return {w:o.width||50,h:o.height||50};return {w:o.width||58,h:o.height||58};}
 export function pointOnObject(state,o,x,y){const a=-o.rotation*Math.PI/180,dx=x-o.x,dy=y-o.y;const px=dx*Math.cos(a)-dy*Math.sin(a),py=dx*Math.sin(a)+dy*Math.cos(a);const {w,h}=dimensions(state,o);return {inside:Math.abs(px)<=w/2&&Math.abs(py)<=h/2,px,py,w,h};}
 export function objectsInRect(state,rect){
   const cx=(rect.left+rect.right)/2,cy=(rect.top+rect.bottom)/2,hw=(rect.right-rect.left)/2,hh=(rect.bottom-rect.top)/2;
@@ -134,8 +135,8 @@ export function validateSession(raw){
     if(['card','board'].includes(o.type)&&!assets.has(o.assetId))throw new Error('存档缺少图片资产');
     if(o.type==='deck'&&(!Array.isArray(o.cards)||o.cards.length>500||o.cards.some(id=>!assets.has(id))))throw new Error('牌堆数据无效');
     if(o.cardFaces!==undefined&&(o.type!=='deck'||!Array.isArray(o.cardFaces)||o.cardFaces.length!==o.cards.length||o.cardFaces.some(face=>typeof face!=='boolean')||o.cards.length&&o.cardFaces.at(-1)!==(o.faceUp!==false)))throw new Error('牌堆卡牌朝向无效');
-    if(o.type==='die'&&(!Array.isArray(o.faces)||o.faces.length!==6||o.faces.some(v=>!finite(v,1,100))||!o.faces.includes(o.value)||!Object.hasOwn(COLORS,o.color)))throw new Error('骰子数据无效');
-    if(o.skin!==undefined&&(o.type!=='die'||!sharedDice.some(d=>d.skin===o.skin)||o.faces.some(v=>!Number.isInteger(v)||v<1||v>6)))throw new Error('骰子外观无效');
+    if(o.type==='die'&&(!Array.isArray(o.faces)||![6,12].includes(o.faces.length)||o.faces.some(v=>!finite(v,1,100))||!o.faces.includes(o.value)||!Object.hasOwn(COLORS,o.color)))throw new Error('骰子数据无效');
+    if(o.skin!==undefined&&(o.type!=='die'||!sharedDice.some(d=>d.skin===o.skin&&o.faces.length===d.faces.length&&o.faces.every(v=>d.faces.includes(v)))))throw new Error('骰子外观无效');
     if(o.type==='token'&&(typeof o.kind!=='string'||o.kind.length>100||o.kind==='custom'&&!assets.has(o.assetId)))throw new Error('标记数据无效');
     if(o.type==='token'&&o.value!==undefined&&!finite(o.value,-999,999))throw new Error('标记数值无效');
     if(o.width!==undefined&&!finite(o.width,20,2000)||o.height!==undefined&&!finite(o.height,20,2000))throw new Error('物件尺寸无效');

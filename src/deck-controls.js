@@ -1,8 +1,8 @@
 import {assetFor,deckEntries} from './model.js';
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export function deckControlsHTML(deck,scope,keys){
+export function deckControlsHTML(deck,keys){
   const button=(action,label,key,disabled=false)=>`<button data-action="${action}" ${disabled?'disabled':''}>${label}${key?` <kbd>${escape(key)}</kbd>`:''}</button>`;
-  return `<div class="deck-scope-switch" aria-label="牌堆操作对象"><button data-deck-scope="top" aria-pressed="${scope==='top'}">顶牌</button><button data-deck-scope="pile" aria-pressed="${scope==='pile'}">整堆</button><kbd>${escape(keys.deckScope)}</kbd></div><div class="deck-scope-actions">${scope==='pile'?button('draw','发牌',keys.roll,!deck.cards.length)+button('search-deck','搜寻',keys.searchDeck,!deck.cards.length)+button('shuffle','洗牌',keys.rotate,deck.cards.length<2):button('flip-top','翻顶牌',keys.flip,!deck.cards.length)+button('inspect','查看顶牌','',!deck.cards.length)}</div>`;
+  return `<div class="deck-scope-actions">${button('draw','发牌',keys.roll,!deck.cards.length)+button('search-deck','搜寻',keys.searchDeck,!deck.cards.length)+button('shuffle','洗牌',keys.rotate,deck.cards.length<2)}</div>`;
 }
 export function deckSearchHTML(state,deck){
   const entries=deckEntries(deck).map((card,index)=>({...card,index})).reverse();

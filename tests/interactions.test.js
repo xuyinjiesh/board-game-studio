@@ -4,6 +4,16 @@ import {wheelIntent,isPanGesture,findCardSnapTarget,snapCardOnto,startDeckPress,
 import {drawFromDeck,adjustTokenValue} from '../src/model.js';
 import {createIronHelmSession,ironHelm,value} from '../src/games/iron-helm.js';
 import {scheduleDeckDraw,DECK_CLICK_MS} from '../src/interactions.js';
+import {startDeckMenuPress} from '../src/interactions.js';
+
+test('a stationary long press opens the pile menu once; release, movement or cancellation before it prevent opening',()=>{
+  let callback,delay,opened=0,canceled=0;
+  const options={schedule:(fn,ms)=>{callback=fn;delay=ms;return 1;},cancel:()=>canceled++};
+  const hold=startDeckMenuPress(()=>opened++,options);assert.equal(delay,DECK_HOLD_MS);assert.equal(opened,0);
+  callback();callback();hold.finish();assert.equal(opened,1);
+  for(const action of ['finish','cancel']){const press=startDeckMenuPress(()=>opened++,options);press[action]();callback();}
+  assert.equal(opened,1);assert.equal(canceled,2);
+});
 
 test('a deck click waits for a double click and canceled draws cannot consume cards',()=>{
   let callback,delay,draws=0,canceled=0;
@@ -31,7 +41,7 @@ test('fixed piles never arm a whole-pile hold and can only drag a top card',()=>
   let scheduled=0,held=0;
   const press=startDeckPress(()=>held++,{fixedPosition:true,schedule:()=>{scheduled++;return 1;}});
   assert.equal(scheduled,0);assert.equal(press.finish(),'card');press.cancel();assert.equal(held,0);
-  const s=createIronHelmSession(),deck=s.objects.find(o=>o.type==='deck'),card=s.objects.find(o=>o.type==='card');
+  const s=createIronHelmSession(),deck=s.objects.find(o=>o.type==='deck'),card=drawFromDeck(s,deck);
   assert.equal(findCardSnapTarget(s,deck),null);assert.equal(snapCardOnto(s,deck,card),false);
   assert.equal(snapCardOnto(s,card,deck),true);
 });

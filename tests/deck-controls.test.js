@@ -6,15 +6,14 @@ import {createSession,baseObject,deckEntries,replaceDeckEntries,drawDeckCard,val
 function fixture(){const s=createSession();s.assets=['a','b','c'].map(id=>({id,type:'card',name:`牌 ${id}`,width:160,height:240,front:'/assets/card-01-front.webp'}));const deck={...baseObject('deck',300,300),name:'测试牌堆',cards:[]};replaceDeckEntries(deck,[{assetId:'a',faceUp:false},{assetId:'b',faceUp:true},{assetId:'c',faceUp:false}]);s.objects=[deck];return {s,deck};}
 test('pile shortcuts are scoped without overriding normal rotation or dice shortcuts',()=>{
   const keys=defaultShortcuts(),command=key=>shortcutAction(keys,{key});
-  assert.equal(command('q'),'deckScope');assert.equal(deckShortcutAction(command('d'),'pile'),'deckDraw');
+  assert.equal(command('q'),null);assert.equal(deckShortcutAction(command('d'),'pile'),'deckDraw');
   assert.equal(deckShortcutAction(command('r'),'pile'),'deckShuffle');assert.equal(deckShortcutAction(command('s'),'pile'),'searchDeck');
   assert.equal(deckShortcutAction(command('d'),'top'),'roll');assert.equal(deckShortcutAction(command('r'),'top'),'rotate');
   assert.equal(deckShortcutAction(command('s'),'top'),null);
 });
 test('top and pile menus expose their own actions and the search window lists cards top first',()=>{
   const {s,deck}=fixture(),keys=defaultShortcuts();
-  assert.match(deckControlsHTML(deck,'top',keys),/flip-top/);assert.doesNotMatch(deckControlsHTML(deck,'top',keys),/search-deck/);
-  const pile=deckControlsHTML(deck,'pile',keys);assert.match(pile,/search-deck/);assert.match(pile,/洗牌/);assert.match(pile,/发牌/);
+  const pile=deckControlsHTML(deck,keys);assert.doesNotMatch(pile,/data-deck-scope|flip-top|查看顶牌|顶牌<|整堆/);assert.match(pile,/search-deck/);assert.match(pile,/洗牌/);assert.match(pile,/发牌/);
   const html=deckSearchHTML(s,deck);assert.ok(html.indexOf('牌 c')<html.indexOf('牌 b'));assert.ok(html.indexOf('牌 b')<html.indexOf('牌 a'));
   assert.match(html,/data-search-draw="2"/);assert.match(html,/顶牌/);
 });

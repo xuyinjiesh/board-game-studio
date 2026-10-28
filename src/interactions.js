@@ -1,6 +1,12 @@
 import {pointOnObject,nextZ,canMoveObject,canReceiveCards,mergeCards} from './model.js';
 
 export const DECK_HOLD_MS=500;
+export function startDeckMenuPress(onOpen,{schedule=setTimeout,cancel=clearTimeout}={}){
+  let active=true;
+  const timer=schedule(()=>{if(active){active=false;onOpen();}},DECK_HOLD_MS);
+  const stop=()=>{if(active){active=false;cancel(timer);}};
+  return {cancel:stop,finish:stop};
+}
 export const DECK_CLICK_MS=500;
 export function scheduleDeckDraw(onDraw,{schedule=setTimeout,cancel=clearTimeout}={}){
   let active=true;

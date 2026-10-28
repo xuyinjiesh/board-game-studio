@@ -8,6 +8,7 @@ export const sharedDice=['White','Red'].flatMap((color)=>[false,true].map(border
   color:color==='White'?'ivory':'orange',faces:[...faces],
   images:faces.map(v=>`${root}die${color}${border?'_border':''}${v}.png`)
 })));
+sharedDice.push({id:'d12-sand',skin:'d12-sand',name:'砂金十二面骰',color:'ivory',faces:Array.from({length:12},(_,i)=>i+1),images:Array.from({length:12},(_,i)=>`/assets/shared/d12/${i+1}.svg`)});
 const palette=[['Blue','湖蓝','#28a5cf'],['Red','朱红','#d85248'],['Green','草绿','#77bf43'],['Yellow','金黄','#e9b923'],['Purple','紫罗兰','#a376d8'],['White','瓷白','#eeeae1'],['Black','墨黑','#363738']];
 export const sharedTokens=palette.flatMap(([color,label,hex])=>[
   ['00','棋子'],['05','米宝'],['10','圆片'],['16','旗帜']

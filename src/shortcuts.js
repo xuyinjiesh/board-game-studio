@@ -2,7 +2,7 @@ export const SHORTCUT_STORAGE='tablecraft.shortcuts.v1';
 export const shortcutDefinitions=[
   ['mode','切换游玩 / 编辑桌面','Ctrl+E'],['save','保存本地草稿','Ctrl+S'],
   ['undo','撤销','Ctrl+Z'],['redo','重做','Ctrl+Shift+Z'],['duplicate','复制物件','Ctrl+D'],
-  ['deckScope','切换顶牌 / 整堆操作','Q'],['searchDeck','搜寻牌堆（整堆模式）','S'],
+  ['searchDeck','搜寻牌堆（牌堆菜单）','S'],
   ['flip','翻转正反面','F'],['rotate','顺时针旋转 / 整堆洗牌','R'],['rotateBack','逆时针旋转 90°','Shift+R'],
   ['roll','投掷骰子 / 整堆发牌','D'],['stack','合成牌堆','G'],['remove','移除物件','Delete'],
   ['zoomIn','放大桌面','+'],['zoomOut','缩小桌面','-'],['fit','适应桌面','0'],['help','操作与快捷键','?']

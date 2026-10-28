@@ -2,12 +2,12 @@ import {deckControlsHTML,deckSearchHTML} from './deck-controls.js';
 import {canResize,resizeObjects,matchObjectSize} from './sizing.js';
 import {sharedDice,sharedTokens,sharedDieImage,sharedToken} from './shared-assets.js';
 import {SHORTCUT_STORAGE,shortcutDefinitions,defaultShortcuts,eventShortcut,bindingError,loadShortcuts,shortcutAction,deckShortcutAction} from './shortcuts.js';
-import {deckEntries,replaceDeckEntries,flipDeck,flipTopCard,shuffleDeck,setDeckFace,createFixedPile,canMoveObject,adjustTokenValue,createSession,applySetup,createDealSlot,validateDeals,assetFor,baseObject,uid,nextZ,dimensions,objectsInRect,pointOnObject,drawDestination,drawFromDeck,drawDeckCard,takeDeckCard,mergeCards,shuffled,COLORS,COLOR_NAMES} from './model.js';
+import {deckEntries,replaceDeckEntries,flipTopCard,shuffleDeck,setDeckFace,createFixedPile,canMoveObject,adjustTokenValue,createSession,applySetup,createDealSlot,validateDeals,assetFor,baseObject,uid,nextZ,rollDieValue,dimensions,objectsInRect,pointOnObject,drawDestination,drawFromDeck,drawDeckCard,takeDeckCard,mergeCards,shuffled,COLORS,COLOR_NAMES} from './model.js';
 import {gameFor,migrateSession,makeExhibit,saveEditorDraft,openEditor,addSetupProfile,switchSetupProfile,updateSetupProfile,removeSetupProfile,startOpening} from './projects.js';
 import {projectStore} from './project-store.js';
 import {createPlaza} from './plaza.js';
 import {sound,objectSound,setAudioEnabled,unlockAudio,stopSound} from './audio.js';
-import {wheelIntent,isPanGesture,cardDropPlan,snapCardOnto} from './interactions.js';
+import {wheelIntent,isPanGesture,cardDropPlan,snapCardOnto,startDeckMenuPress} from './interactions.js';
 import {openingHTML as openingPropertiesHTML,drawTargetHTML,openingChoicesHTML,pileSettingsHTML,sizeSettingsHTML} from './opening-editor.js';
 import {nameMatches,libraryName} from './library.js';
 import {examples} from './projects.js';
@@ -19,9 +19,12 @@ const STORAGE='tablecraft.workspace.v1',RECOVERY='tablecraft.recovery.v2';
 let state=createSession(),storageFailed=false,workspaceLoaded=false,plaza,savedFingerprint='';
 let selected=new Set(),history=[],future=[],tab='cards',zoom=1,pan={x:0,y:0},drag=null,saveTimer,toastTimer,spaceDown=false,importPurpose='new',pendingImages=[],rolling=new Set();
 let metaEditing=null,pendingExport=null,exportReplacementId;
-let pickingDrawTarget=null,deckScope='top',deckScopeId=null;
-const currentDeckScope=()=>primary()?.id===deckScopeId?deckScope:'top';
-function setDeckScope(scope){const deck=primary();if(deck?.type!=='deck'||deck.locked)return;deckScope=scope;deckScopeId=deck.id;renderSelection();renderInspector();}
+let pickingDrawTarget=null,deckMenuId=null;
+const currentDeckScope=()=>deckMenuId&&primary()?.id===deckMenuId?'pile':'top';
+function closeDeckMenu(){deckMenuId=null;$('#deck-draw-tools').hidden=true;}
+function beginDeckMenuPress(pending,deck){
+  pending.press=startDeckMenuPress(()=>{if(drag!==pending||pending.moved)return;deckMenuId=deck.id;pending.kind='deck-menu';renderDeckDrawTools();});
+}
 let activeDrawer=state.mode==='edit'?'assets':null,modeRevealTimer;
 const scene=$('#scene'),viewport=$('#viewport'),objects=$('#objects');
 const objectNodes=new Map();
@@ -29,7 +32,7 @@ const icons={flip:'⤾',rotate:'↻',draw:'↗',shuffle:'⤨',stack:'▱',lock:'
 function notify(text){$('#toast').textContent=text;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),3200);}
 function play(kind,options){sound(kind,state.settings.sound,options);}
 function playObjects(items,action='drop'){for(const cue of [...new Set(items.map(o=>objectSound(o,action)))].slice(0,3))play(cue);}
-for(const event of ['pointerdown','keydown'])document.addEventListener(event,()=>{if(workspaceLoaded&&!$('#app').hidden)unlockAudio(state.settings.sound);},{capture:true});
+for(const event of ['pointerdown','keydown'])document.addEventListener(event,e=>{if(event==='pointerdown'&&!e.target.closest('#deck-draw-tools,#modal'))closeDeckMenu();if(workspaceLoaded&&!$('#app').hidden)unlockAudio(state.settings.sound);},{capture:true});
 function checkpoint(){history.push(JSON.stringify(state));if(history.length>60)history.shift();future=[];}
 async function saveNow(){
   clearTimeout(saveTimer);saveTimer=null;if(!workspaceLoaded)return;
@@ -45,7 +48,7 @@ function diceTemplates(){return [...commonDiceTemplates(),...(game()?.dice||[])]
 function commonTokenTemplates(){return [...sharedTokens,{kind:'disc',name:'圆形标记',color:'#c79e62',description:'自由用途 · 可修改颜色'}];}
 function tokenTemplates(){return [...commonTokenTemplates(),...(game()?.tokens||[])];}
 async function activateSession(session,{newExample=false,chooseProfile=false}={}){
-  cancelDrawTarget();state=migrateSession(session);workspaceLoaded=true;savedFingerprint='';selected.clear();rolling.clear();history=[];future=[];tab=gameTab='cards';activeDrawer=state.mode==='edit'?'assets':null;
+  closeDeckMenu();cancelDrawTarget();state=migrateSession(session);workspaceLoaded=true;savedFingerprint='';selected.clear();rolling.clear();history=[];future=[];tab=gameTab='cards';activeDrawer=state.mode==='edit'?'assets':null;
   if(state.mode==='play'&&(state.awaitingOpening||(newExample||chooseProfile)&&state.setupProfiles?.length>1)){state.awaitingOpening=true;state.objects=[];}
   $('#modal').close();$('#plaza').hidden=true;$('#app').hidden=false;
   setAudioEnabled(state.settings.sound);render();requestAnimationFrame(fit);await saveNow();
@@ -106,6 +109,7 @@ function objectLayer(o){return o.type==='board'?-100+o.z/1000000:['die','token']
 function updateDie(node,o){const face=node.querySelector('.die-face');if(face&&face.dataset.value!==String(o.value)){face.innerHTML=dieVisual(o);face.dataset.value=String(o.value);}}
 function render(){
   $('#app').dataset.mode=state.mode;
+  $('#app').dataset.game=state.gameId;
   renderShortcutHints();
   syncObjects();renderSelection();renderInspector();renderLibrary();renderDrawTarget();
   const controls=$('#game-controls');controls.hidden=!game()?.toolbar;controls.innerHTML=game()?.toolbar?.(state)||'';
@@ -132,7 +136,7 @@ function renderDrawers(){
   const panel=$('#object-drawer'),open=state.mode==='edit'&&!!primary()&&activeDrawer!=='settings';panel.classList.toggle('open',open);panel.inert=!open;panel.setAttribute('aria-hidden',String(!open));
 }
 function setDrawer(name){if(name&&innerWidth<900){selected.clear();renderSelection();renderInspector();}const previous=activeDrawer;activeDrawer=state.mode==='edit'?name:null;renderDrawers();if(previous&&!activeDrawer&&state.mode==='edit')$(`[data-drawer="${previous}"]`)?.focus({preventScroll:true});}
-function setMode(mode){cancelDrawTarget();if(mode===state.mode)return;if(mode==='play'&&state.setupProfiles?.length>1){chooseOpening();return;}let next;try{next=mode==='play'?startOpening(state):openEditor(state);}catch(error){notify(error.message);return;}checkpoint();state=next;selected.clear();activeDrawer=mode==='edit'?'assets':null;$('#mode-toggle').classList.remove('revealed');render();fit();save();}
+function setMode(mode){closeDeckMenu();cancelDrawTarget();if(mode===state.mode)return;if(mode==='play'&&state.setupProfiles?.length>1){chooseOpening();return;}let next;try{next=mode==='play'?startOpening(state):openEditor(state);}catch(error){notify(error.message);return;}checkpoint();state=next;selected.clear();activeDrawer=mode==='edit'?'assets':null;$('#mode-toggle').classList.remove('revealed');render();fit();save();}
 function revealEditor(){clearTimeout(modeRevealTimer);for(const el of [$('#mode-toggle'),$('#play-plaza')])el.classList.add('revealed');modeRevealTimer=setTimeout(()=>{for(const el of [$('#mode-toggle'),$('#play-plaza')])el.classList.remove('revealed');},3500);}
 function renderSelection(){
   for(const [id,node]of objectNodes){node.classList.toggle('selected',selected.has(id));node.classList.toggle('pile-selected',selected.has(id)&&currentDeckScope()==='pile');}
@@ -141,19 +145,19 @@ function renderSelection(){
 }
 function renderDeckDrawTools(){
   const tools=$('#deck-draw-tools'),deck=primary();
-  if(deck?.id!==deckScopeId){deckScope='top';deckScopeId=deck?.type==='deck'?deck.id:null;}
-  tools.hidden=!!drag||spaceDown||selected.size!==1||deck?.type!=='deck'||deck.locked;
+  if(deck?.id!==deckMenuId)deckMenuId=null;
+  tools.hidden=!deckMenuId||!!drag&&drag.kind!=='deck-menu'||spaceDown||selected.size!==1||deck?.type!=='deck'||deck.locked;
   if(tools.hidden)return;
   const {w,h}=dimensions(state,deck),angle=deck.rotation*Math.PI/180;
   const halfHeight=(Math.abs(Math.sin(angle))*w+Math.abs(Math.cos(angle))*h)*zoom/2;
   const x=pan.x+deck.x*zoom,y=pan.y+deck.y*zoom,r=viewport.getBoundingClientRect();
   if(x+w*zoom/2<0||x-w*zoom/2>r.width||y+halfHeight<0||y-halfHeight>r.height){tools.hidden=true;return;}
   tools.style.left=`${Math.max(150,Math.min(r.width-150,x))}px`;
-  tools.style.top=`${Math.max(8,Math.min(r.height-52,y-halfHeight-96))}px`;
+  tools.style.top=`${Math.max(8,Math.min(r.height-52,y-halfHeight-52))}px`;
   tools.dataset.scope=currentDeckScope();tools.setAttribute('aria-label',currentDeckScope()==='pile'?'整堆操作':'顶牌操作');
-  const html=deckControlsHTML(deck,currentDeckScope(),shortcuts);if(tools.innerHTML!==html)tools.innerHTML=html;
+  const html=deckControlsHTML(deck,shortcuts);if(tools.innerHTML!==html)tools.innerHTML=html;
 }
-const dieButton=d=>`<button class="public-asset" data-add-die="${escape(d.id)}"><span class="public-art dice-sample" style="--swatch:${COLORS[d.color]}">${d.skin?dieVisual({...d,value:5}):pips(5)}</span><strong>${escape(d.name)}</strong><small>六面骰 · 可投掷</small></button>`;
+const dieButton=d=>`<button class="public-asset" data-add-die="${escape(d.id)}"><span class="public-art dice-sample" style="--swatch:${COLORS[d.color]}">${d.skin?dieVisual({...d,value:5}):pips(5)}</span><strong>${escape(d.name)}</strong><small>${d.faces.length} 面骰 · 可投掷</small></button>`;
 const tokenButton=t=>`<button class="public-asset" data-add-token="${escape(t.kind)}"><span class="public-art token-sample ${t.image?'shared-sample':''}" style="background:${t.color}">${tokenSVG(t.kind)}</span><strong>${escape(t.name)}</strong><small>${escape(t.description)}</small></button>`;
 const section=(title,items)=>`<h3 class="public-section-title">${title}</h3><div class="public-grid">${items}</div>`;
 let publicFilter='all',gameTab='cards';
@@ -229,8 +233,8 @@ function renderInspector(){
   const el=$('#inspector-content'),o=primary(),items=selection(),orderOpen=el.querySelector('.opening-properties details')?.open,orderScroll=el.querySelector('.deck-order')?.scrollTop||0;
   if(!o){el.innerHTML='';return;}else{
     const a=assetFor(state,o.assetId);
-    el.innerHTML=`<div class="selected-heading"><span class="tiny-label">${items.length>1?`已选择 ${items.length} 个物件`:'当前选中'}</span><h2>${escape(objectName(o))}</h2><span class="object-type">${({card:'双面卡牌',deck:o.maxCards===1?'固定牌位':`牌堆 · ${o.cards?.length || 0} 张`,die:'六面骰 · 单面显示',token:'桌面标记',board:'自定义版图',deal:'开局发牌位置'})[o.type]}</span></div>`+openingHTML(o)+
-    (o.type==='card'?`<button class="inspector-card" data-action="inspect">${cardFace(texture(o.assetId,o.faceUp),!o.faceUp)}</button><div class="two-buttons"><button data-action="flip">⤾ 翻面 <kbd>F</kbd></button><button data-action="rotate">↻ 旋转 <kbd>R</kbd></button></div>`:o.type==='deck'?`<div class="deck-preview">${o.cards.length?cardFace(texture(o.cards.at(-1),o.faceUp)):fallbackBack()}${o.maxCards===1?'':`<b>${o.cards.length}</b>`}</div><button class="primary-button" data-action="draw" ${!o.cards.length?'disabled':''}>发到指定位置 ↗</button><div class="two-buttons"><button data-action="shuffle">⤨ 洗牌</button><button data-action="spread">▱ 展开全部</button></div><p class="subtle-note">${state.mode==='edit'?'点击选择牌堆，直接拖动整叠来安排开局。':o.fixedPosition?'固定牌位：默认拖动取顶牌，整堆操作时牌位仍保持固定。':'默认拖动顶牌；按 Q 切换整堆后拖动整叠。'}默认操作顶牌，按 Q 切换整堆；整堆模式 D 发牌、S 搜寻、R 洗牌。Shift 多选卡牌后按 G 可合堆。</p>`:o.type==='die'?`<div class="die-preview" style="--swatch:${COLORS[o.color]}"><span>${dieVisual(o)}</span><small>${escape(o.name||COLOR_NAMES[o.color])} · D6</small></div><button class="primary-button" data-action="roll">⚄ 掷出这一颗 <kbd>D</kbd></button><div class="inspector-section"><h3>手动调整骰面</h3><div class="face-picker">${o.faces.map(v=>`<button data-die-value="${v}" class="${v===o.value?'active':''}">${v}</button>`).join('')}</div><p class="subtle-note">选中后按数字键切换骰面，<kbd>0</kbd> 对应 10 点。<br>开局时可保留当前骰面，或随机投掷。</p></div>`:o.type==='token'?`<div class="token-preview" style="background:${/^#[0-9a-f]{6}$/i.test(o.color)?o.color:'#b86231'}">${tokenFace(o)}</div><p class="subtle-note">${escape(tokenTemplates().find(t=>t.kind===o.kind)?.description||'自由拖动、复制和摆放，记录你的游戏状态。')}</p>`:o.type==='deal'?'<p class="subtle-note">这是发牌位置，开始游玩后才会生成实际卡牌。可以直接拖动、旋转和复制。</p>':`<img class="board-preview" src="${escape(a?.front)}" alt="版图预览">`)+
+    el.innerHTML=`<div class="selected-heading"><span class="tiny-label">${items.length>1?`已选择 ${items.length} 个物件`:'当前选中'}</span><h2>${escape(objectName(o))}</h2><span class="object-type">${({card:'双面卡牌',deck:o.maxCards===1?'固定牌位':`牌堆 · ${o.cards?.length || 0} 张`,die:`${o.faces?.length??6} 面骰 · 单面显示`,token:'桌面标记',board:'自定义版图',deal:'开局发牌位置'})[o.type]}</span></div>`+openingHTML(o)+
+    (o.type==='card'?`<button class="inspector-card" data-action="inspect">${cardFace(texture(o.assetId,o.faceUp),!o.faceUp)}</button><div class="two-buttons"><button data-action="flip">⤾ 翻面 <kbd>F</kbd></button><button data-action="rotate">↻ 旋转 <kbd>R</kbd></button></div>`:o.type==='deck'?`<div class="deck-preview">${o.cards.length?cardFace(texture(o.cards.at(-1),o.faceUp)):fallbackBack()}${o.maxCards===1?'':`<b>${o.cards.length}</b>`}</div><button class="primary-button" data-action="draw" ${!o.cards.length?'disabled':''}>发到指定位置 ↗</button><div class="two-buttons"><button data-action="shuffle">⤨ 洗牌</button><button data-action="spread">▱ 展开全部</button></div><p class="subtle-note">${state.mode==='edit'?'点击选择牌堆，直接拖动整叠来安排开局。':o.fixedPosition?'固定牌位：直接拖动取顶牌，牌位保持固定。':'直接拖动取顶牌，长按打开牌堆菜单。'}默认操作顶牌；长按打开牌堆菜单，菜单中 D 发牌、S 搜寻、R 洗牌。Shift 多选卡牌后按 G 可合堆。</p>`:o.type==='die'?`<div class="die-preview" style="--swatch:${COLORS[o.color]}"><span>${dieVisual(o)}</span><small>${escape(o.name||COLOR_NAMES[o.color])} · D${o.faces.length}</small></div><button class="primary-button" data-action="roll">⚄ 掷出这一颗 <kbd>D</kbd></button><div class="inspector-section"><h3>手动调整骰面</h3><div class="face-picker">${o.faces.map(v=>`<button data-die-value="${v}" class="${v===o.value?'active':''}">${v}</button>`).join('')}</div><p class="subtle-note">选中后按数字键切换骰面，<kbd>0</kbd> 对应 10 点。<br>开局时可保留当前骰面，或随机投掷。</p></div>`:o.type==='token'?`<div class="token-preview" style="background:${/^#[0-9a-f]{6}$/i.test(o.color)?o.color:'#b86231'}">${tokenFace(o)}</div><p class="subtle-note">${escape(tokenTemplates().find(t=>t.kind===o.kind)?.description||'自由拖动、复制和摆放，记录你的游戏状态。')}</p>`:o.type==='deal'?'<p class="subtle-note">这是发牌位置，开始游玩后才会生成实际卡牌。可以直接拖动、旋转和复制。</p>':`<img class="board-preview" src="${escape(a?.front)}" alt="版图预览">`)+
     `<div class="inspector-section"><div class="section-title"><h3>物件属性</h3><button data-action="lock" class="text-button">${o.locked?'⌑ 已锁定':'⌑ 锁定'}</button></div><div class="property-row"><label>角度 <input type="number" data-property="rotation" value="${Math.round(o.rotation)}" step="15" min="-360" max="360" ${!isMovable(o)?'disabled':''}></label><span>°</span></div><div class="two-buttons"><button data-action="rotate-left">↶ −15°</button><button data-action="rotate-small">↻ +15°</button></div>${o.type==='token'&&!sharedToken(o.kind)&&state.mode==='edit'?`<div class="property-row"><label>标记颜色 <input type="color" data-property="color" value="${/^#[0-9a-f]{6}$/i.test(o.color)?o.color:'#b86231'}"></label></div>`:''}<div class="two-buttons"><button data-action="duplicate">⧉ 复制</button><button data-action="bring-front">↑ 置顶</button></div>${(o.type==='card'||o.type==='token'&&o.kind==='custom')&&state.mode==='edit'?'<button class="full-width quiet" data-action="change-back">更换背面图片 ↗</button>':''}<button class="danger-button" data-action="delete">移除选中物件</button></div>`;
   }
   if(orderOpen&&el.querySelector('.opening-properties details')){el.querySelector('.opening-properties details').open=true;el.querySelector('.deck-order').scrollTop=orderScroll;}
@@ -252,8 +256,8 @@ function addToken(kind){const template=tokenTemplates().find(t=>t.kind===kind);i
 
 function setDiceValue(value){const dice=selection().filter(o=>o.type==='die'&&!o.locked&&!rolling.has(o.id)&&o.faces.includes(value)&&o.value!==value);if(dice.length)mutate(()=>dice.forEach(o=>o.value=value),{audio:'die-drop'});}
 function isMovable(o){return canMoveObject(o,state.mode);}
-function flip(){const cards=selection().filter(o=>['card','deck','token','deal'].includes(o.type)&&!o.locked);if(!cards.length)return;mutate(()=>cards.forEach(o=>{if(o.type==='deck'){if(currentDeckScope()==='top')flipTopCard(o);else flipDeck(o);}else o.faceUp=o.faceUp===false;}),{audio:'flip'});}
-function rotate(amount=90){const deck=primary();if(state.mode==='play'&&selected.size===1&&deck?.type==='deck'&&currentDeckScope()==='top'){if(deck.locked||!deck.cards.length)return;mutate(()=>{const card=drawFromDeck(state,deck,undefined,deck);card.rotation+=amount;selected=new Set([card.id]);},{audio:'card-drop'});return;}const items=selection().filter(isMovable);if(!items.length)return;mutate(()=>items.forEach(o=>{o.rotation=Math.round((o.rotation+amount)*10)/10;if(amount%90===0&&game()?.onDrop&&o.type==='card')snapObject(o);}),{audio:()=>playObjects(items)});}
+function flip(){const cards=selection().filter(o=>['card','deck','token','deal'].includes(o.type)&&!o.locked);if(!cards.length)return;mutate(()=>cards.forEach(o=>{if(o.type==='deck')flipTopCard(o);else o.faceUp=o.faceUp===false;}),{audio:'flip'});}
+function rotate(amount=90){const deck=primary();if(state.mode==='play'&&selected.size===1&&deck?.type==='deck'){if(deck.locked||!deck.cards.length)return;mutate(()=>{const card=drawFromDeck(state,deck,undefined,deck);card.rotation+=amount;selected=new Set([card.id]);},{audio:'card-drop'});return;}const items=selection().filter(isMovable);if(!items.length)return;mutate(()=>items.forEach(o=>{o.rotation=Math.round((o.rotation+amount)*10)/10;if(amount%90===0&&game()?.onDrop&&o.type==='card')snapObject(o);}),{audio:()=>playObjects(items)});}
 function draw(faceUp,deck=primary(),index=deck?.cards.length-1){
   if(deck?.type!=='deck'||!deck.cards.length||deck.locked)return;
   let destination;try{destination=drawDestination(state,deck.drawTarget?deck:{...deck,drawTarget:{mode:'right',gap:30}});}catch(error){notify(error.message);return;}
@@ -266,7 +270,7 @@ function renderDeckSearch(){const deck=state.objects.find(o=>o.id===$('#modal').
 function searchDeck(){const deck=primary();if(deck?.type!=='deck'||deck.locked)return;openModal(deckSearchHTML(state,deck));$('#modal').dataset.kind='deck-search';$('#modal').dataset.deckId=deck.id;}
 function roll(){
   const dice=selection().filter(o=>o.type==='die'&&!o.locked&&!rolling.has(o.id));if(!dice.length)return;
-  checkpoint();for(const d of dice){rolling.add(d.id);d.value=d.faces[Math.floor(Math.random()*6)];d.rotation+=(Math.random()-.5)*state.settings.scatter*2;}render();play(dice.length>1?'roll-many':'roll');
+  checkpoint();for(const d of dice){rolling.add(d.id);d.value=rollDieValue(d);d.rotation+=(Math.random()-.5)*state.settings.scatter*2;}render();play(dice.length>1?'roll-many':'roll');
   for(const [i,die]of dice.entries()){
     const face=objectNodes.get(die.id)?.querySelector('.die-face');if(!face)continue;
     const duration=matchMedia('(prefers-reduced-motion: reduce)').matches?1:650+i*40;
@@ -278,9 +282,9 @@ function shuffle(){const deck=primary();if(deck?.type!=='deck'||deck.locked||dec
 function stack(){const eligible=selection().filter(o=>['card','deck'].includes(o.type)&&!o.locked);if(eligible.length<2){notify('按住 Shift 选择至少两张卡牌或牌堆，再合并');return;}mutate(()=>{const deck=mergeCards(state,[...selected]);if(deck)selected=new Set([deck.id]);},{audio:'card-drop'});}
 function spread(){const deck=primary();if(deck?.type!=='deck'||deck.locked||!deck.cards.length)return;if(state.objects.some(o=>o.type==='deal'&&o.sourceKey===deck.setupKey)){notify('这个牌堆关联了初始牌位，请先移除这些牌位再展开');return;}mutate(()=>{const ids=[];deckEntries(deck).forEach(({assetId,faceUp},i)=>{const o={...baseObject('card',deck.x+(i%5)*185,deck.y+Math.floor(i/5)*265,nextZ(state)+i),assetId,faceUp,rotation:(Math.random()-.5)*state.settings.scatter*2};state.objects.push(o);ids.push(o.id);});if(deck.fixedPosition)replaceDeckEntries(deck,[]);else state.objects=state.objects.filter(o=>o.id!==deck.id);selected=new Set(ids);},{audio:'spread'});}
 function undo(redo=false){const from=redo?future:history,to=redo?history:future;if(!from.length)return;to.push(JSON.stringify(state));state=JSON.parse(from.pop());setAudioEnabled(state.settings.sound);selected.clear();rolling.clear();render();save();notify(redo?'已重做':'已撤销');}
-function remove(){const deck=primary();if(state.mode==='play'&&selected.size===1&&deck?.type==='deck'&&currentDeckScope()==='top'){if(deck.locked||!deck.cards.length)return;mutate(()=>takeDeckCard(deck),{audio:'card-pickup'});return;}const items=selection().filter(isMovable);if(!items.length)return;mutate(()=>{const ids=new Set(items.map(o=>o.id)),keys=new Set(items.filter(o=>o.type==='deck').map(o=>o.setupKey).filter(Boolean));state.objects=state.objects.filter(o=>!ids.has(o.id)&&!(o.type==='deal'&&keys.has(o.sourceKey)));selected.clear();},{audio:()=>playObjects(items,'pickup')});}
+function remove(){const deck=primary();if(state.mode==='play'&&selected.size===1&&deck?.type==='deck'){if(deck.locked||!deck.cards.length)return;mutate(()=>takeDeckCard(deck),{audio:'card-pickup'});return;}const items=selection().filter(isMovable);if(!items.length)return;mutate(()=>{const ids=new Set(items.map(o=>o.id)),keys=new Set(items.filter(o=>o.type==='deck').map(o=>o.setupKey).filter(Boolean));state.objects=state.objects.filter(o=>!ids.has(o.id)&&!(o.type==='deal'&&keys.has(o.sourceKey)));selected.clear();},{audio:()=>playObjects(items,'pickup')});}
 function duplicate(){
-  const deck=primary();if(state.mode==='play'&&selected.size===1&&deck?.type==='deck'&&currentDeckScope()==='top'){if(deck.locked||!deck.cards.length)return;const entry=deckEntries(deck).at(-1),{w,h}=dimensions(state,deck);mutate(()=>{const card={...baseObject('card',deck.x+45,deck.y+45,nextZ(state)),...entry,width:w,height:h,rotation:deck.rotation};state.objects.push(card);selected=new Set([card.id]);},{audio:'card-drop'});return;}
+  const deck=primary();if(state.mode==='play'&&selected.size===1&&deck?.type==='deck'){if(deck.locked||!deck.cards.length)return;const entry=deckEntries(deck).at(-1),{w,h}=dimensions(state,deck);mutate(()=>{const card={...baseObject('card',deck.x+45,deck.y+45,nextZ(state)),...entry,width:w,height:h,rotation:deck.rotation};state.objects.push(card);selected=new Set([card.id]);},{audio:'card-drop'});return;}
   const items=selection().filter(o=>state.mode==='edit'||!o.fixedPosition);if(!items.length)return;
   const keys=new Map(items.filter(o=>o.type==='deck'&&o.setupKey).map(o=>[o.setupKey,uid()]));
   const drawKeys=new Map(items.filter(o=>o.drawKey).map(o=>[o.drawKey,uid()]));
@@ -290,7 +294,7 @@ function duplicate(){
   mutate(()=>{state.objects.push(...added);selected=new Set(added.map(o=>o.id));},{audio:()=>playObjects(items)});
 }
 function openModal(html,wide=false){$('#modal').dataset.kind='';$('#modal-content').innerHTML=html;$('#modal').classList.toggle('wide',wide);if(!$('#modal').open)$('#modal').showModal();}
-function rules(){const rules=game()?.rules;openModal(`<span class="section-eyebrow">HOW TO PLAY</span><h2>${escape(rules?.title||state.name)}</h2>${rules?`<p class="modal-lead">${escape(rules.credit)}</p><ol class="rule-steps">${rules.steps.map(([title,text])=>`<li><strong>${escape(title)}</strong><p>${escape(text)}</p></li>`).join('')}</ol><a class="primary-button" href="${rules.pdf}" target="_blank" rel="noopener">打开完整规则 ↗</a>${(rules.links||[]).map(([label,url])=>`<a class="primary-button" href="${escape(url)}" target="_blank" rel="noopener">${escape(label)} ↗</a>`).join('')}`:''}<div class="project-rules-text">${escape(state.meta?.rules||(!rules?'还没有规则说明，可在编辑模式的「桌面」中填写。':''))}</div>${game()?.score?`<p class="subtle-note">参考得分：${game().score(state).total}</p>`:''}<p class="subtle-note">工坊提供自由操作桌面，游戏规则由玩家执行。</p>`);}
+function rules(){if(game()?.journal){gameAction('journal','');return;}const rules=game()?.rules;openModal(`<span class="section-eyebrow">HOW TO PLAY</span><h2>${escape(rules?.title||state.name)}</h2>${rules?`<p class="modal-lead">${escape(rules.credit)}</p><ol class="rule-steps">${rules.steps.map(([title,text])=>`<li><strong>${escape(title)}</strong><p>${escape(text)}</p></li>`).join('')}</ol><a class="primary-button" href="${rules.pdf}" target="_blank" rel="noopener">打开完整规则 ↗</a>${(rules.links||[]).map(([label,url])=>`<a class="primary-button" href="${escape(url)}" target="_blank" rel="noopener">${escape(label)} ↗</a>`).join('')}`:''}<div class="project-rules-text">${escape(state.meta?.rules||(!rules?'还没有规则说明，可在编辑模式的「桌面」中填写。':''))}</div>${game()?.score?`<p class="subtle-note">参考得分：${game().score(state).total}</p>`:''}<p class="subtle-note">工坊提供自由操作桌面，游戏规则由玩家执行。</p>`);}
 
 function renderGameDialog(){
   const view=$('#modal').dataset.gameView||'journal';
@@ -300,7 +304,7 @@ function gameAction(action,value){
   if(action==='choose-hero'&&state.setupProfiles?.some(p=>p.id===`ih-hero-${value}`)){beginOpening(`ih-hero-${value}`);return;}
   if(action==='heroes'&&state.setupProfiles?.length){chooseOpening();return;}
   if(['journal','catalog','heroes'].includes(action)){
-    openModal(game()?.[action]?.(state)||'',action!=='journal');
+    openModal(game()?.[action]?.(state)||'',['catalog','heroes'].includes(action));
     $('#modal').dataset.kind='game';$('#modal').dataset.gameView=action;return;
   }
   if(!game()?.act)return;
@@ -331,7 +335,7 @@ function renderShortcutHints(){
 }
 function help(){
   openModal(`<span class="section-eyebrow">A LITTLE GUIDE</span><h2>操作与快捷键</h2><p class="modal-lead">点击快捷键后按下新组合，立即保存。所有游戏共用此设置。</p><p id="shortcut-feedback" role="status" aria-live="polite"></p><div class="shortcut-settings">${shortcutDefinitions.map(d=>`<label><span>${d.label}</span><input data-shortcut="${d.id}" aria-label="${d.label}快捷键" value="${escape(shortcuts[d.id])}" readonly autocomplete="off" spellcheck="false"></label>`).join('')}</div><button class="full-width quiet" data-action="reset-shortcuts">恢复默认快捷键</button><h3>鼠标与基础操作</h3><div class="shortcut-list">${[
-    ['Esc','关闭弹窗 / 取消选择；游玩时显示编辑入口'],['拖动物件','拿起、移动、松手摆放'],['空白处左键拖动','框选多个部件'],['Shift + 点击 / 框选','追加选择多个物件'],['空格 + 拖动 / 中键拖动','平移桌面'],['卡牌上轻点中键','顺时针旋转 90°'],['Ctrl + 滚轮','缩放桌面'],['数值标记上滚轮','调整数值，遵守游戏范围'],['双击卡牌 / 牌堆 / 骰子','卡牌翻面 / 只翻顶牌 / 投掷'],['选中骰子 + 数字键','切换骰面；0 = 10 点，优先于适应桌面'],['游玩时点击 / 拖动牌堆','默认选择 / 拖走顶牌；按 Q 切换整堆后拖动整叠'],['编辑时拖动牌堆','移动整叠'],['拖到牌堆中央','自动加入牌堆，无需按 Alt'],['拖到单张卡牌中央','吸附对齐；按 Alt 合并为牌堆'],['右键物件','查看卡牌详情或物件属性']
+    ['Esc','关闭弹窗 / 取消选择；游玩时显示编辑入口'],['拖动物件','拿起、移动、松手摆放'],['空白处左键拖动','框选多个部件'],['Shift + 点击 / 框选','追加选择多个物件'],['空格 + 拖动 / 中键拖动','平移桌面'],['卡牌上轻点中键','顺时针旋转 90°'],['Ctrl + 滚轮','缩放桌面'],['数值标记上滚轮','调整数值，遵守游戏范围'],['双击卡牌 / 牌堆 / 骰子','卡牌翻面 / 只翻顶牌 / 投掷'],['选中骰子 + 数字键','切换骰面；0 = 10 点，优先于适应桌面'],['游玩时点击 / 拖动 / 长按牌堆','选择顶牌 / 拖走顶牌 / 打开牌堆菜单'],['编辑时拖动牌堆','移动整叠'],['拖到牌堆中央','自动加入牌堆，无需按 Alt'],['拖到单张卡牌中央','吸附对齐；按 Alt 合并为牌堆'],['右键物件','查看卡牌详情或物件属性']
   ].map(([k,v])=>`<div><kbd>${k}</kbd><span>${v}</span></div>`).join('')}</div><p class="subtle-note">快捷键保存在当前浏览器，Ctrl 组合也支持 Command 键。Tab 切换输入框，Esc 关闭窗口。</p>`);
 }
 function storeShortcuts(next){
@@ -393,7 +397,6 @@ actions['blank-table']=()=>openModal('<span class="section-eyebrow">YOUR NEXT GA
 actions['confirm-blank']=()=>{mutate(()=>{state.objects=[];selected.clear();});$('#modal').close();};
 document.addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b||b.disabled)return;
-  if(b.dataset.deckScope){setDeckScope(b.dataset.deckScope);return;}
   if(b.dataset.searchDraw!==undefined){const deck=state.objects.find(o=>o.id===$('#modal').dataset.deckId);if(deck)draw(undefined,deck,Number(b.dataset.searchDraw));return;}
   if(b.dataset.editProfile){editProfile(b.dataset.editProfile);return;}
   if(b.dataset.startProfile){beginOpening(b.dataset.startProfile);return;}
@@ -487,13 +490,11 @@ viewport.addEventListener('pointerdown',e=>{
   if(!o){drag={kind:'marquee',pointerId:e.pointerId,sx:e.clientX,sy:e.clientY,moved:false,add:e.shiftKey,selected:[...selected]};viewport.setPointerCapture(e.pointerId);e.preventDefault();return;}
   if(e.shiftKey){select(o,true);e.preventDefault();return;}
   if(!selected.has(o.id))select(o);if(o.locked||rolling.has(o.id))return;
-  if(state.mode==='play'&&o.type==='deck'&&o.cards.length&&selected.size===1){
-    if(currentDeckScope()==='top'){
+  if(state.mode==='play'&&o.type==='deck'&&selected.size===1){
       drag={kind:'deck-press',pointerId:e.pointerId,sx:e.clientX,sy:e.clientY,ids:[o.id],deckId:o.id,moved:false,alt:e.altKey};
-      renderDeckDrawTools();viewport.setPointerCapture(e.pointerId);e.preventDefault();return;
-    }
+      beginDeckMenuPress(drag,o);renderDeckDrawTools();viewport.setPointerCapture(e.pointerId);e.preventDefault();return;
   }
-  const items=selection().filter(o=>isMovable(o)&&!rolling.has(o.id));if(!items.length)return;drag={kind:'object',pointerId:e.pointerId,sx:e.clientX,sy:e.clientY,ids:items.map(x=>x.id),starts:items.map(x=>({id:x.id,x:x.x,y:x.y,rotation:x.rotation})),moved:false,alt:e.altKey};viewport.setPointerCapture(e.pointerId);e.preventDefault();
+  const items=selection().filter(o=>isMovable(o)&&!rolling.has(o.id));if(!items.length)return;drag={kind:'object',pointerId:e.pointerId,sx:e.clientX,sy:e.clientY,ids:items.map(x=>x.id),starts:items.map(x=>({id:x.id,x:x.x,y:x.y,rotation:x.rotation})),moved:false,alt:e.altKey};if(o.type==='deck'&&selected.size===1)beginDeckMenuPress(drag,o);viewport.setPointerCapture(e.pointerId);e.preventDefault();
 });
 viewport.addEventListener('pointermove',e=>{
   if(!drag)return;const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
@@ -503,6 +504,8 @@ viewport.addEventListener('pointermove',e=>{
     const owner=state.objects.find(o=>o.id===drag.ownerId);
     if(owner){owner.drawTarget.x=Math.max(-10000,Math.min(10000,Math.round(drag.start.x+dx/zoom)));owner.drawTarget.y=Math.max(-10000,Math.min(10000,Math.round(drag.start.y+dy/zoom)));renderDrawTarget();}return;
   }
+  if(drag.kind==='deck-menu')return;
+  drag.press?.cancel();
   if(drag.kind==='deck-press'){
     drag.press?.finish();
     const deck=state.objects.find(o=>o.id===drag.deckId);
@@ -547,6 +550,7 @@ function endDrag(e,cancelled=false){
   objectNodes.get(previous.deckId)?.classList.remove('deck-pressing','deck-held','dragging');
   $('#card-snap-preview').hidden=true;
   if(previous.kind==='draw-target'){if(previous.moved){if(cancelled)state=JSON.parse(history.pop());render();save();}return;}
+  if(previous.kind==='deck-menu'){if(cancelled)closeDeckMenu();renderDeckDrawTools();return;}
   if(previous.kind==='deck-press'){renderDeckDrawTools();return;}
   if(previous.kind==='pan'){
     if(cancelled){pan=previous.pan;transformScene();}
@@ -574,7 +578,7 @@ function endDrag(e,cancelled=false){
   else if(previous.deckHeld){for(const o of selection())stopSound(objectSound(o,'pickup'));if(!cancelled)playObjects(selection());renderDeckDrawTools();}
 }
 viewport.addEventListener('pointerup',e=>endDrag(e));viewport.addEventListener('pointercancel',e=>endDrag(e,true));
-viewport.addEventListener('dblclick',e=>{if(spaceDown||e.button!==0||e.target.closest('button:not(.table-object)'))return;const node=e.target.closest('.table-object')||document.elementFromPoint(e.clientX,e.clientY)?.closest('.table-object');if(!node)return;const o=state.objects.find(x=>x.id===node.dataset.id);if(!o)return;select(o);if(o.type==='deck'){if(currentDeckScope()==='top'&&!o.locked&&o.cards.length)mutate(()=>flipTopCard(o),{audio:'flip'});}else if(['card','token'].includes(o.type))flip();else if(o.type==='die')roll();});
+viewport.addEventListener('dblclick',e=>{if(spaceDown||e.button!==0||e.target.closest('button:not(.table-object)'))return;const node=e.target.closest('.table-object')||document.elementFromPoint(e.clientX,e.clientY)?.closest('.table-object');if(!node)return;const o=state.objects.find(x=>x.id===node.dataset.id);if(!o)return;if(o.type==='deck'&&deckMenuId===o.id)return;select(o);if(o.type==='deck'){if(currentDeckScope()==='top'&&!o.locked&&o.cards.length)mutate(()=>flipTopCard(o),{audio:'flip'});}else if(['card','token'].includes(o.type))flip();else if(o.type==='die')roll();});
 viewport.addEventListener('wheel',e=>{
   e.preventDefault();
   if(e.target.closest('#game-controls,.view-tools'))return;
@@ -586,7 +590,7 @@ viewport.addEventListener('wheel',e=>{
     if(adjustTokenValue(draft,token,intent.delta,game()?.adjustToken))mutate(()=>state=draft);
   }
 },{passive:false});
-viewport.addEventListener('contextmenu',e=>{const node=e.target.closest('.table-object');if(!node)return;e.preventDefault();if(drag)endDrag({pointerId:drag.pointerId},true);const o=state.objects.find(x=>x.id===node.dataset.id);if(!o)return;select(o);if(o.type==='deck'&&state.mode==='play'&&currentDeckScope()==='pile')renderDeckDrawTools();else if(o.type==='card'||o.type==='deck'&&currentDeckScope()==='top'&&o.cards.length)inspect();else properties();});
+viewport.addEventListener('contextmenu',e=>{const node=e.target.closest('.table-object');if(!node)return;e.preventDefault();if(drag?.kind==='deck-menu')return;if(drag)endDrag({pointerId:drag.pointerId},true);const o=state.objects.find(x=>x.id===node.dataset.id);if(!o)return;select(o);if(o.type==='deck'&&state.mode==='play'&&currentDeckScope()==='pile')renderDeckDrawTools();else if(o.type==='card'||o.type==='deck'&&currentDeckScope()==='top'&&o.cards.length)inspect();else properties();});
 viewport.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault();});
 document.addEventListener('keydown',e=>{
   if($('#app').hidden)return;
@@ -610,10 +614,10 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Alt'&&drag){e.preventDefault();updateCardSnapPreview(true);return;}
   if(e.code==='Space'&&!e.target.closest('input,textarea,select,[contenteditable="true"]')&&!$('#modal').open&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();spaceDown=true;viewport.classList.add('space-pan');return;}
   if(drag)return;
-  if(e.key==='Escape'&&!$('#modal').open){if(activeDrawer){setDrawer(null);return;}select(null);if(state.mode==='play')revealEditor();return;}
+  if(e.key==='Escape'&&!$('#modal').open){if(deckMenuId){closeDeckMenu();return;}if(activeDrawer){setDrawer(null);return;}select(null);if(state.mode==='play')revealEditor();return;}
   if(typing||$('#modal').open)return;
   if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&!e.shiftKey&&/^\d$/.test(e.key)&&selection().some(o=>o.type==='die')){e.preventDefault();if(!e.repeat)setDiceValue(e.key==='0'?10:Number(e.key));return;}
-  const commands={deckScope:()=>setDeckScope(currentDeckScope()==='top'?'pile':'top'),deckDraw:()=>draw(),deckShuffle:shuffle,searchDeck,undo,redo:()=>undo(true),duplicate,flip,rotate:()=>rotate(90),rotateBack:()=>rotate(-90),roll,stack,remove,zoomIn:()=>zoomAt(1.15),zoomOut:()=>zoomAt(1/1.15),fit,help};
+  const commands={deckDraw:()=>draw(),deckShuffle:shuffle,searchDeck,undo,redo:()=>undo(true),duplicate,flip,rotate:()=>rotate(90),rotateBack:()=>rotate(-90),roll,stack,remove,zoomIn:()=>zoomAt(1.15),zoomOut:()=>zoomAt(1/1.15),fit,help};
   if(commands[command]){e.preventDefault();if(!e.repeat)commands[command]();}
 
 });
