@@ -3,6 +3,7 @@ import {examples,gameFor,createProject,copyProject,openEditor,startOpening} from
 import {projectStore} from './project-store.js';
 import {findLibraryDraft,libraryName} from './library.js';
 import {uid} from './model.js';
+import {gameCatalog,classificationFor,CATALOG_CHECKED} from './game-catalog.js';
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const $=s=>document.querySelector(s);
 const icon=paths=>'<svg class="plaza-icon" viewBox="0 0 24 24" aria-hidden="true">'+paths+'</svg>';
@@ -13,6 +14,8 @@ const editIcon=icon('<path d="m14 5 5 5M4 20l5-1L20 8a3.5 3.5 0 0 0-5-5L4 14Z"/>
 export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
   let filter='all',projects=[],exhibits=[],busy=false,pendingRemoval=null,lastRemoval=null;
   const notice=document.createElement('div');notice.className='library-notice';notice.hidden=true;notice.setAttribute('role','status');$('#plaza-grid').before(notice);
+  $('#plaza-rating-sources').innerHTML=Object.values(gameCatalog).map(entry=>'<li><strong>'+escape(entry.name)+'</strong><span>'+entry.ratings.map(rating=>'<a href="'+escape(rating.url)+'" target="_blank" rel="noopener noreferrer">'+escape(rating.name)+' '+rating.weight.toFixed(2)+'/5'+(rating.indirect?'（转引）':'')+' ↗</a>').join(' · ')+(entry.note?'<small>'+escape(entry.note)+'</small>':'')+'</span></li>').join('');
+  $('#plaza-rating-date').textContent=CATALOG_CHECKED;
   function renderNotice(){notice.hidden=!lastRemoval;notice.innerHTML=lastRemoval?`<span>${lastRemoval.kind==='projects'?'已删除草稿':'已撤销发布'}「${escape(lastRemoval.entries[0].session.name)}」</span><button data-undo-library>撤销</button>`:'';}
   function confirmRemoval(kind,id){
     const entry=(kind==='projects'?projects:exhibits).find(e=>e.id===id);if(!entry)return;
@@ -28,12 +31,15 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
     const buttons=type==='project'?'<button data-plaza-project'+attrs+'><span>编辑草稿</span>'+arrowIcon+'</button>'+(session.mode==='play'?'<button class="secondary" data-resume-project'+attrs+'>继续游玩</button>':''):'<button data-plaza-'+type+attrs+'><span>开始游玩</span>'+arrowIcon+'</button><button class="secondary" data-edit-'+type+attrs+'>'+editIcon+'编辑游戏</button>';
     const exampleIndex=examples.findIndex(game=>game.id===session.gameId);
     const tone=['sage','sand','slate','clay'][(exampleIndex<0?[...String(session.gameId||id)].reduce((sum,c)=>sum+c.charCodeAt(0),0):exampleIndex)%4];
-    const badge=type==='example'?'工坊精选':type==='project'?'本地草稿':'玩家作品';
+    const badge=type==='example'?'':'<span class="plaza-card-badge"><i></i>'+(type==='project'?'本地草稿':'玩家作品')+'</span>';
     const meta=(session.meta?.players?'<span>'+playersIcon+escape(session.meta.players)+'</span>':'')+(session.meta?.duration?'<span>'+clockIcon+escape(session.meta.duration)+'</span>':'');
-    return '<article class="plaza-card" data-cover-tone="'+tone+'"><div class="plaza-art"><span class="plaza-card-badge"><i></i>'+badge+'</span><div class="plaza-cover-stack">'+art+'</div></div><div class="plaza-card-body"><h3>'+escape(session.name)+'</h3><p>'+escape(session.meta?.description||'自由摆放，随时开始。')+'</p><div class="plaza-card-meta">'+meta+'</div><div class="plaza-card-actions">'+buttons+'</div>'+(type==='exhibit'?'<button class="unlist-exhibit" data-unlist'+attrs+'>撤销发布</button>':type==='project'?'<button class="delete-draft" data-delete-draft'+attrs+'>删除草稿</button>':'')+'</div></article>';
+    const info=classificationFor(session.gameId),tags='<div class="plaza-card-tags" aria-label="游戏分类">'+info.tags.map(tag=>'<span>'+escape(tag)+'</span>').join('')+'</div>';
+    const bars='<span class="plaza-difficulty-bars" aria-hidden="true">'+Array.from({length:5},(_,i)=>'<i'+(info.level&&i<info.level?' class="filled"':'')+'></i>').join('')+'</span>';
+    const difficulty=info.level?'<a class="plaza-difficulty" href="'+escape(info.ratings[0].url)+'" target="_blank" rel="noopener noreferrer" aria-label="'+escape('难度参考：'+info.label+'，BGG 复杂度 '+info.score+'/5，查看来源')+'" title="'+escape('原作复杂度参考；'+(info.note||'扩展与自定义修改可能改变实际体验。'))+'">'+bars+'<span>'+escape(info.label)+'</span><small>'+escape(info.score)+'/5</small></a>':'<span class="plaza-difficulty unrated" title="自制游戏尚无公开复杂度参考">'+bars+'<span>难度待评</span></span>';
+    return '<article class="plaza-card" data-cover-tone="'+tone+'"><div class="plaza-art">'+badge+'<div class="plaza-cover-stack">'+art+'</div></div><div class="plaza-card-body"><h3>'+escape(session.name)+'</h3>'+tags+'<p>'+escape(session.meta?.description||'自由摆放，随时开始。')+'</p><div class="plaza-card-meta">'+meta+difficulty+'</div><div class="plaza-card-actions">'+buttons+'</div>'+(type==='exhibit'?'<button class="unlist-exhibit" data-unlist'+attrs+'>撤销发布</button>':type==='project'?'<button class="delete-draft" data-delete-draft'+attrs+'>删除草稿</button>':'')+'</div></article>';
   }
   function renderCards(){
-    const query=$('#plaza-search').value.trim().toLowerCase(),matches=s=>[s.name,s.meta?.description].join(' ').toLowerCase().includes(query),cards=[];
+    const query=$('#plaza-search').value.trim().toLowerCase(),matches=s=>{const info=classificationFor(s.gameId);return [s.name,s.meta?.description,...info.tags,info.level?info.label:''].join(' ').toLowerCase().includes(query);},cards=[];
     if(filter==='all'){
       for(const game of examples){if(exhibits.some(e=>libraryName(e.session.name)===libraryName(game.title)))continue;const s=game.create(()=>.5);s.name=game.title;if(matches(s))cards.push(card(s,'example',game.id));}
       for(const entry of exhibits)if(matches(entry.session))cards.push(card(entry.session,'exhibit',entry.id));
