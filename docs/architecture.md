@@ -11,7 +11,7 @@
 - `src/games/grove.js`：果丛的资产、默认开局、骰面、标记、规则、果树吸附和计分；通过游戏模块接口接入。
 - `src/projects.js`：游戏注册表、项目复制、旧存档迁移、展示快照。
 - `src/opening-editor.js`：物件级开局选项、发牌位置和牌序调整界面。
-- `src/project-store.js`：IndexedDB 草稿库、展示库与独立游玩存档库；广场游玩通过 `playOriginKey` 按作品保存进度。
+- `src/project-store.js`：草稿与展示存入 `tablecraft.projects`，游玩存档存入独立的 `tablecraft.play-sessions` 数据库，通过 `playOriginKey` 按作品保存进度。打开已有数据库时沿用其版本，避免旧标签页阻塞升级；兼容读取旧版 `playSessions` 存档。
 - `src/plaza.js` / `src/plaza.css`：作品广场、本地草稿、搜索与已有草稿复用。
 - `src/style.css`：工坊界面、桌布、纸牌双面与抬升、单面骰子和响应式布局。
 - `src/audio.js`：本地 CC0 实录音效，按卡牌、骰子、木质标记、纸板和版图区分；预加载与缓存、随机变体、并发限制及即时静音。

@@ -75,7 +75,17 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
   }
   async function run(operation){if(busy)return;busy=true;$('#plaza').setAttribute('aria-busy','true');try{await operation();}catch(error){notify(error.message);}finally{busy=false;$('#plaza').removeAttribute('aria-busy');}}
   const api={
-    async show(nextFilter=filter){await flush();filter=nextFilter==='mine'?'mine':'all';$('#app').hidden=true;$('#plaza').hidden=false;$('#plaza-loading').hidden=false;try{[projects,exhibits]=await Promise.all([projectStore.list(),projectStore.exhibits()]);projects.sort((a,b)=>b.updatedAt-a.updatedAt);exhibits.sort((a,b)=>b.publishedAt-a.publishedAt);renderCards();}finally{$('#plaza-loading').hidden=true;}},
+    async show(nextFilter=filter){
+      await flush();filter=nextFilter==='mine'?'mine':'all';$('#app').hidden=true;$('#plaza').hidden=false;
+      $('#plaza-loading').textContent='正在读取…';$('#plaza-loading').hidden=false;
+      try{
+        [projects,exhibits]=await Promise.all([projectStore.list(),projectStore.exhibits()]);
+        projects.sort((a,b)=>b.updatedAt-a.updatedAt);exhibits.sort((a,b)=>b.publishedAt-a.publishedAt);renderCards();
+      }catch(error){
+        $('#plaza-grid').innerHTML=`<div class="plaza-empty" role="alert"><h3>本地存档暂时无法读取</h3><p>${escape(error.message)}</p><button class="primary-button" data-retry-library>重试读取</button></div>`;
+        throw error;
+      }finally{$('#plaza-loading').hidden=true;}
+    },
     async create(name){await flush();const existing=findLibraryDraft(await projectStore.list(),{name});if(existing){notify('已有同名草稿，已打开原草稿');await activate(openEditor(existing.session));return;}await activate(createProject('custom',name));},
     async import(session){await flush();if(findLibraryDraft(await projectStore.list(),session))throw new Error('本地草稿已有同名游戏，请先修改草稿名称再导入');await activate(openEditor(copyProject(session)));},
     edit:session=>openGame(session,session.playOriginKey,true,session.playOriginKey?.startsWith('example:')),
@@ -86,6 +96,7 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
     const b=e.target.closest('button');if(!b)return;
     if(b.dataset.plazaFilter){filter=b.dataset.plazaFilter;renderCards();return;}
     const d=b.dataset;
+    if(b.hasAttribute('data-retry-library'))run(()=>api.show(filter));
     if(d.plazaExample||d.editExample)run(async()=>{const game=examples.find(g=>g.id===(d.plazaExample||d.editExample));const source=createProject(game.id,game.title);await openGame(source,'example:'+game.id,!!d.editExample,true);});
     if(d.resumeProject)run(async()=>{await flush();const entry=await projectStore.get(d.resumeProject);if(!entry)throw new Error('进度未找到');await activate(entry.session);});
     if(d.plazaProject)run(async()=>{await flush();const entry=await projectStore.get(d.plazaProject);if(!entry)throw new Error('草稿未找到');await activate(openEditor(entry.session));});

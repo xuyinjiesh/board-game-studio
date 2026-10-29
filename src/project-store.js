@@ -1,18 +1,33 @@
 import {draftNameConflict,exhibitNameConflict,nameMatches,uniqueLibraryEntries} from './library.js';
-let database;
-function openDatabase(){
-  return database??=new Promise((resolve,reject)=>{
-    const request=indexedDB.open('tablecraft.projects',2);
+const databases=new Map(),PLAY_DATABASE='tablecraft.play-sessions';
+function openDatabase(name='tablecraft.projects'){
+  if(databases.has(name))return databases.get(name);
+  const pending=new Promise((resolve,reject)=>{
+    let settled=false,request;
+    const fail=message=>{if(settled)return;settled=true;clearTimeout(timer);reject(new Error(message));};
+    const timer=setTimeout(()=>fail('本地存档读取超时，请关闭该游戏的其他标签页后重试'),10000);
+    // Opening the current version avoids an upgrade lock held by older tabs.
+    try{request=indexedDB.open(name);}catch{fail('无法打开本地存档，请检查浏览器的存储权限后重试');return;}
     request.onupgradeneeded=()=>{
       const db=request.result;
-      for(const name of ['projects','exhibits','playSessions'])if(!db.objectStoreNames.contains(name))db.createObjectStore(name,{keyPath:'id'});
+      for(const store of name===PLAY_DATABASE?['sessions']:['projects','exhibits'])if(!db.objectStoreNames.contains(store))db.createObjectStore(store,{keyPath:'id'});
     };
-    request.onsuccess=()=>resolve(request.result);
-    request.onerror=()=>reject(new Error('无法打开本地项目库，请导出桌面备份'));
+    request.onsuccess=()=>{
+      const db=request.result;if(settled){db.close();return;}
+      settled=true;clearTimeout(timer);
+      const forget=()=>{if(databases.get(name)===pending)databases.delete(name);};
+      db.onversionchange=()=>{db.close();forget();};db.onclose=forget;
+      resolve(db);
+    };
+    request.onblocked=()=>fail('本地存档被其他页面占用，请关闭该游戏的其他标签页后重试');
+    request.onerror=()=>fail('无法打开本地项目库，请检查浏览器的存储权限后重试');
   });
+  databases.set(name,pending);
+  pending.catch(()=>{if(databases.get(name)===pending)databases.delete(name);});
+  return pending;
 }
-async function transaction(store,mode,operation){
-  const db=await openDatabase();
+async function transaction(store,mode,operation,databaseName){
+  const db=await openDatabase(databaseName);
   return new Promise((resolve,reject)=>{
     const tx=db.transaction(store,mode),request=operation(tx.objectStore(store));
     tx.oncomplete=()=>resolve(request.result);
@@ -23,11 +38,19 @@ export const projectStore={
   async save(session){
     if(session.playOriginKey){
       if(session.awaitingOpening)return;
-      return transaction('playSessions','readwrite',store=>store.put({id:session.playOriginKey,updatedAt:session.updatedAt||Date.now(),session}));
+      return transaction('sessions','readwrite',store=>store.put({id:session.playOriginKey,updatedAt:session.updatedAt||Date.now(),session}),PLAY_DATABASE);
     }
     return writeUnique('projects',session);
   },
-  getPlay:originKey=>transaction('playSessions','readonly',store=>store.get(originKey)),
+  async getPlay(originKey){
+    const saved=await transaction('sessions','readonly',store=>store.get(originKey),PLAY_DATABASE);
+    if(saved)return saved;
+    // Preserve progress written by the earlier version-two project database.
+    const db=await openDatabase();if(!db.objectStoreNames.contains('playSessions'))return;
+    const legacy=await transaction('playSessions','readonly',store=>store.get(originKey));
+    if(legacy)await transaction('sessions','readwrite',store=>store.put(legacy),PLAY_DATABASE);
+    return legacy;
+  },
   get:id=>transaction('projects','readonly',store=>store.get(id)),
   async archive(id,archived){const entry=await this.get(id);if(!entry)throw new Error('项目未找到');entry.session.archived=archived;await this.save(entry.session);},
   async list(){return uniqueLibraryEntries(await transaction('projects','readonly',store=>store.getAll()));},
