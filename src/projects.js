@@ -3,8 +3,9 @@ import {grove,builtinAssets} from './games/grove.js';
 import {ironHelm} from './games/iron-helm.js';
 import {pocketPaladin} from './games/pocket-paladin.js';
 import {northwood} from './games/for-northwood.js';
+import {realms} from './games/52-realms.js';
 
-export const examples=[grove,ironHelm,pocketPaladin,northwood];
+export const examples=[grove,ironHelm,pocketPaladin,northwood,realms];
 export const gameFor=id=>examples.find(game=>game.id===id);
 
 // Old workspaces had an implicit shared Grove asset library. Make it explicit

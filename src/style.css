@@ -166,6 +166,22 @@ dialog:has(.deck-search-list){width:640px}
 #app[data-mode] .scene[data-game="for-northwood"] .nw-zone{display:block;border:0;text-align:left;color:#e9d7b7cc}
 .scene[data-game="for-northwood"] .nw-zone>span{font-size:20px;letter-spacing:2px}
 .scene[data-game="for-northwood"] .nw-zone>small{font-size:13px;letter-spacing:.5px;line-height:1.5;opacity:.85}
+
+/* 52 Realms keeps its printed blue-and-gold sheets at the center of play. */
+#app[data-game="52-realms"][data-mode] #game-controls{top:auto;bottom:16px;max-width:calc(100% - 32px)}
+.realms-toolbar{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;padding:9px 14px;border:1px solid #cbb57866;border-radius:9px;background:#152e43ed;color:#efe6cb;box-shadow:0 6px 24px #0004;backdrop-filter:blur(12px)}
+.realms-toolbar button{padding:8px 12px;border:1px solid #ccb87944;border-radius:5px;font-size:12px;color:#efe6cb;background:#ffffff08}
+.realms-toolbar button:hover{background:#cab16c26}.realms-toolbar button:disabled{opacity:.4;cursor:default}
+.realms-vitals{font-size:12px;color:#efbcaf;font-variant-numeric:tabular-nums}.realms-vitals i{font-style:normal;margin-left:12px;color:#e6d7a9}.realms-danger{color:#ff8181;font-weight:700}
+#app[data-mode] .scene[data-game="52-realms"] .realms-zone{display:block;border:0;text-align:left;color:#e4dcc2aa}
+.scene[data-game="52-realms"] .realms-zone>span{font-size:21px;letter-spacing:2px}.scene[data-game="52-realms"] .realms-zone>small{font-size:13px;letter-spacing:1px}
+.scene[data-game="52-realms"] .token-body{border-radius:4px;border:2px solid #fff9;box-shadow:1px 3px 5px #0008}
+.realms-marker-core{display:block;width:6px;height:6px;border-radius:50%;background:#fff8}
+.realms-rule-links{display:flex;gap:10px;flex-wrap:wrap}
+#app[data-game="52-realms"][data-mode="play"] .fixed-position .pile-label{display:block;top:calc(100% + 26px);left:50%;width:145%;max-width:none;transform:translateX(-50%);color:#efe3c5;font-size:17px;line-height:1.4;text-align:center;text-shadow:0 1px 3px #10251d}
+#app[data-game="52-realms"][data-mode="play"] .fixed-position:has(.empty-pile) .pile-guide{display:block;inset:0;border:2px dashed #d3b97966;border-radius:7px;background:#152e431c}
+#app[data-game="52-realms"][data-mode="play"] .fixed-position:has(.empty-pile) .pile-label{top:50%;transform:translate(-50%,-50%);width:88%;font-size:19px;line-height:1.6}
+@media(max-width:600px){.realms-toolbar{gap:5px;padding:6px}.realms-toolbar button{font-size:11px;padding:6px 8px}.realms-vitals{flex-basis:100%;text-align:center;order:2}}
 .scene[data-game="for-northwood"] .nw-reserve>span{font-size:13px}
 .scene[data-game="for-northwood"] .nw-reserve>small{font-size:10px}
 .scene[data-game="for-northwood"] .card:is(:hover,.selected):not(.dragging) .card-lift{transform:none}
