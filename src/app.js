@@ -85,7 +85,7 @@ function dieVisual(o){const image=sharedDieImage(o.skin,o.value)||game()?.dieIma
 function dieHTML(o){return `<div class="die-face ${sharedDieImage(o.skin,o.value)?'shared-die-face':''}" aria-hidden="true">${dieVisual(o)}</div>`;}
 function tokenSVG(kind,o){const shared=sharedToken(kind);if(shared)return `<img class="shared-token-image" src="${assetUrl(shared.image)}" alt="" draggable="false">${Number.isFinite(o?.value)?`<span class="shared-token-value">${o.value}</span>`:''}`;return game()?.tokens?.some(t=>t.kind===kind)?assetHTML(game().tokenIcon(kind,o)):`<span class="disc-star">${Number.isFinite(o?.value)?o.value:'✦'}</span>`;}
 function tokenFace(o){if(o.kind==='custom'){const image=texture(o.assetId,o.faceUp!==false);return image?cardFace(image,o.faceUp===false):'<span class="token-back" aria-label="背面">●</span>';}return o.faceUp===false?'<span class="token-back" aria-label="背面">●</span>':tokenSVG(o.kind,o);}
-function nodeSignature(o){return JSON.stringify([o.type,o.skin,o.assetId,o.cards?.length,o.cards?.at(-1),o.faces,o.kind,o.name,o.maxCards,o.fixedPosition,o.type==='token'?[o.value,o.faceUp]:null,o.type==='deal'?[o.sourceKey,o.count,o.layout,o.spacing]:null]);}
+function nodeSignature(o){return JSON.stringify([o.type,o.skin,o.assetId,o.cards?.length,o.cards?.at(-1),o.faces,o.kind,o.name,o.maxCards,o.fixedPosition,o.type==='token'?[o.value,o.faceUp]:null,o.type==='deal'?[o.sourceKey,o.count,o.layout,o.spacing]:null,game()?.objectSignature?.(o),state.mode]);}
 function syncObjects(){
   const focusedHand=handObjects.contains(document.activeElement)?document.activeElement:null;
   handView.hidden=state.mode!=='play'||!state.handZone||!!state.awaitingOpening;
@@ -109,7 +109,7 @@ function syncObjects(){
       else if(o.type==='token')node.innerHTML=`<div class="token-body">${tokenFace(o)}</div>`;
       else if(o.type==='deal'&&o.layout==='deck')node.innerHTML=`<div class="deck-layers"></div><div class="deck-top"><span class="empty-pile"></span></div>${o.maxCards===1?'':`<span class="deck-count">${o.count}</span>`}${o.fixedPosition?`<span class="pile-guide" aria-hidden="true"></span><span class="pile-label" aria-hidden="true">${escape(o.name)}</span>`:`<span class="deck-caption">${escape(o.name)}</span>`}`;
       else if(o.type==='deal')node.innerHTML=`<div class="deal-placeholder"><span>↗</span><strong>${escape(o.name)}</strong><small>${o.count} 张 · ${escape(state.objects.find(d=>d.type==='deck'&&d.setupKey===o.sourceKey)?.name||'选择来源牌堆')}</small><em>${o.layout==='deck'?'开局生成牌堆':'开局展开单牌'}</em></div>`;
-      else node.innerHTML=`<img class="board-image" src="${escape(texture(o.assetId))}" draggable="false" alt="${escape(objectName(o))}">`;
+      else node.innerHTML=`<img class="board-image" src="${escape(texture(o.assetId))}" draggable="false" alt="${escape(objectName(o))}">${game()?.boardOverlay?.(state,o)||''}`;
       node.dataset.signature=signature;
     }
     const {w,h}=dimensions(state,o);
@@ -242,7 +242,7 @@ function editProfile(id){
 function chooseOpening(){
   openingDraft=null;
   if(game()?.expansionChoiceHTML){openModal(game().expansionChoiceHTML(saveEditorDraft(state)),true);$('#modal').dataset.kind='expansion-choice';syncExpansionChoices();return;}
-  openModal(`<h2>选择角色开局</h2><p class="modal-lead">加载所选方案，再独立洗牌、发初始牌。当前进度可撤销恢复。</p>${openingChoicesHTML(saveEditorDraft(state))}`,state.gameId==='iron-helm');
+  openModal(`<h2>${escape(game()?.openingTitle||'选择角色开局')}</h2><p class="modal-lead">${escape(game()?.openingDescription||'加载所选方案，再独立洗牌、发初始牌。当前进度可撤销恢复。')}</p>${openingChoicesHTML(saveEditorDraft(state))}`,state.gameId==='iron-helm');
   $('#modal').dataset.kind='opening-choice';
 }
 function syncExpansionChoices(){
@@ -280,13 +280,14 @@ function settingsHTML(){return `<div class="project-fields"><h3>项目资料</h3
 function transformScene(){scene.style.transform=`translate(${pan.x}px,${pan.y}px) scale(${zoom})`;$('#zoom-label').textContent=`${Math.round(zoom*100)}%`;renderDeckDrawTools();}
 function fitObjects(items){
   const r=viewport.getBoundingClientRect();if(!r.width||!r.height)return;
-  const height=r.height-(handView.hidden?0:handView.offsetHeight+30);
+  const insets=game()?.viewInsets?.(r)||{},width=r.width-(insets.left||0)-(insets.right||0);
+  const height=r.height-(handView.hidden?0:handView.offsetHeight+30)-(insets.top||0)-(insets.bottom||0);
   if(state.mode==='play')items=items.filter(o=>!o.handId);
   if(!items.length){zoom=1;pan={x:r.width/2-720,y:height/2-500};transformScene();return;}
   const bounds=items.map(o=>{const {w,h}=dimensions(state,o),a=o.rotation*Math.PI/180,hw=(Math.abs(Math.cos(a))*w+Math.abs(Math.sin(a))*h)/2,hh=(Math.abs(Math.sin(a))*w+Math.abs(Math.cos(a))*h)/2;return {left:o.x-hw,right:o.x+hw,top:o.y-hh,bottom:o.y+hh};});
   const left=Math.min(...bounds.map(b=>b.left)),right=Math.max(...bounds.map(b=>b.right)),top=Math.min(...bounds.map(b=>b.top)),bottom=Math.max(...bounds.map(b=>b.bottom));
-  zoom=Math.max(.2,Math.min(1.2,(r.width-100)/(right-left),(height-(handView.hidden?140:100))/(bottom-top)));
-  pan={x:r.width/2-(left+right)/2*zoom,y:height/2-(top+bottom)/2*zoom};transformScene();
+  zoom=Math.max(.2,Math.min(1.2,(width-100)/(right-left),(height-(handView.hidden?140:100))/(bottom-top)));
+  pan={x:(insets.left||0)+width/2-(left+right)/2*zoom,y:(insets.top||0)+height/2-(top+bottom)/2*zoom};transformScene();
 }
 function fitTable(items){const bounds=game()?.tableBounds;fitObjects(bounds?[...items,{...bounds,rotation:0}]:items);}
 function fit(){fitTable(state.objects);}
@@ -398,22 +399,25 @@ function rules(){if(game()?.journal){gameAction('journal','');return;}const rule
 
 function renderGameDialog(){
   const view=$('#modal').dataset.gameView||'journal';
-  $('#modal-content').innerHTML=game()?.[view]?.(state)||'';
+  $('#modal-content').innerHTML=assetHTML(game()?.[view]?.(state)||'');
 }
 function gameAction(action,value){
   if(action==='choose-hero'&&state.setupProfiles?.some(p=>p.id===`ih-hero-${value}`)){beginOpening(`ih-hero-${value}`);return;}
   if(action==='heroes'&&state.setupProfiles?.length){chooseOpening();return;}
-  if(['journal','catalog','heroes'].includes(action)){
+  if(['journal','catalog','heroes',...(game()?.views||[])].includes(action)){
     openModal(game()?.[action]?.(state)||'',['catalog','heroes'].includes(action));
     $('#modal').dataset.kind='game';$('#modal').dataset.gameView=action;return;
   }
+  const dialog=game()?.dialog?.(state,action,value);
+  if(dialog){openModal(dialog);return;}
   if(!game()?.act)return;
   // Apply to an isolated draft: a rejected action must leave the table and undo intact.
   const draft=structuredClone(state);
   const message=game().act(draft,action,value,[...selected]);
   mutate(()=>{state=draft;selected=new Set([...selected].filter(id=>state.objects.some(o=>o.id===id)));},{audio:'drop'});
   if(action==='choose-hero'){$('#modal').close();fit();}
-  if(message)notify(message);
+  if(message?.closeDialog)$('#modal').close();
+  if(typeof message==='string')notify(message);else if(message?.message)notify(message.message);
 }
 function gameError(error){
   notify(error.message);
@@ -536,7 +540,12 @@ document.addEventListener('click',e=>{
   else if(b.dataset.theme)mutate(()=>state.settings.theme=b.dataset.theme);
   else if(b.dataset.dieValue)setDiceValue(Number(b.dataset.dieValue));
 });
+document.addEventListener('submit',e=>{
+  const form=e.target;if(!form.dataset.gameSubmit)return;e.preventDefault();
+  try{gameAction(form.dataset.gameSubmit,`${form.dataset.gameValue||''}|${new FormData(form).get('value')??''}`);}catch(error){gameError(error);}
+});
 document.addEventListener('change',e=>{
+  if(e.target.dataset.gameInput){try{gameAction(e.target.dataset.gameInput,`${e.target.dataset.gameValue||''}|${e.target.value}`);}catch(error){gameError(error);}return;}
   const el=e.target;if(el.hasAttribute('data-ih-expansion')){syncExpansionChoices();return;}if(el.dataset.setting){mutate(()=>state.settings[el.dataset.setting]=el.type==='checkbox'?el.checked:Number(el.value));}
   if(el.dataset.meta==='name'&&!el.value.trim()){el.value=state.name;notify('游戏名称不能为空');}
   if(el.hasAttribute('data-draw-mode')){

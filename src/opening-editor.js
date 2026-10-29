@@ -5,7 +5,8 @@ export function openingChoicesHTML(state,{editing=false}={}){
   const profiles=state.setupProfiles||[];
   const previews=profiles.map(p=>{
     const hero=p.setup.objects.find(o=>o.ihRole==='hero'&&(o.type==='card'||o.cards?.length))
-      ||p.setup.objects.find(o=>o.type==='card'&&assetFor(state,o.assetId)?.group==='hero');
+      ||p.setup.objects.find(o=>o.type==='card'&&assetFor(state,o.assetId)?.group==='hero')
+      ||p.setup.objects.find(o=>o.type==='board'&&assetFor(state,o.assetId)?.group==='sheet');
     const id=p.coverAssetId??(hero?.assetId||hero?.cards?.at(-1)),asset=assetFor(state,id);
     if(!asset)return null;
     const piece=p.setup.objects.find(o=>o.type==='card'&&o.assetId===id);

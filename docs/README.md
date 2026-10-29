@@ -18,3 +18,4 @@ README 介绍整体功能；详细操作、内部实现、游戏专用行为与�
 - [为了北境森林 / For Northwood!](games/for-northwood.md)：入门与完整开局、独立手牌区、对话牌整理与边缘吸附。
 - [52王国 / 52 Realms: Adventures](games/52-realms.md)：三张地图、六位角色、随机准备、诅咒揭示与牌位计分。
 - [迷你游侠 / Mini Rogue](games/mini-rogue.md)：入口区分 DLC、双面地图、八位角色、随机地城、原图骰子与独立传说牌堆。
+- [聪明系列 / Clever](games/clever.md)：四代与三张挑战纸、纸面填写、单人选骰与银盘流程、奖励记录及计分。
