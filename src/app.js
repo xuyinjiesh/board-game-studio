@@ -81,7 +81,7 @@ function texture(id,face=true){const a=assetFor(state,id);return assetUrl(face?a
 function fallbackBack(){return '<div class="custom-back"><span>✳</span><small>TABLECRAFT</small></div>';}
 function cardFace(url,back=false){return url?`<img src="${escape(url)}" alt="${back?'卡牌背面':'卡牌正面'}" draggable="false">`:fallbackBack();}
 function pips(value){if(value>6)return `<span class="face-number">${value}</span>`;const patterns={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};return `<span class="pips">${Array.from({length:9},(_,i)=>`<i class="${patterns[value]?.includes(i)?'pip':''}"></i>`).join('')}</span>`;}
-function dieVisual(o){const image=sharedDieImage(o.skin,o.value);return image?`<img class="shared-die-image" src="${assetUrl(image)}" alt="" draggable="false">`:pips(o.value);}
+function dieVisual(o){const image=sharedDieImage(o.skin,o.value)||game()?.dieImage?.(o);return image?`<img class="shared-die-image" src="${assetUrl(image)}" alt="" draggable="false">`:pips(o.value);}
 function dieHTML(o){return `<div class="die-face ${sharedDieImage(o.skin,o.value)?'shared-die-face':''}" aria-hidden="true">${dieVisual(o)}</div>`;}
 function tokenSVG(kind,o){const shared=sharedToken(kind);if(shared)return `<img class="shared-token-image" src="${assetUrl(shared.image)}" alt="" draggable="false">${Number.isFinite(o?.value)?`<span class="shared-token-value">${o.value}</span>`:''}`;return game()?.tokens?.some(t=>t.kind===kind)?assetHTML(game().tokenIcon(kind,o)):`<span class="disc-star">${Number.isFinite(o?.value)?o.value:'✦'}</span>`;}
 function tokenFace(o){if(o.kind==='custom'){const image=texture(o.assetId,o.faceUp!==false);return image?cardFace(image,o.faceUp===false):'<span class="token-back" aria-label="背面">●</span>';}return o.faceUp===false?'<span class="token-back" aria-label="背面">●</span>':tokenSVG(o.kind,o);}
@@ -489,6 +489,18 @@ actions['add-profile']=()=>{const next=addSetupProfile(state,$('#profile-name').
 actions['save-profile-options']=()=>{const next=updateSetupProfile(state,{name:$('#profile-name').value,coverAssetId:$('#profile-cover').value==='auto'?undefined:$('#profile-cover').value,description:$('#profile-description').value});mutate(()=>state=next);manageProfiles();notify('开局选项已保存，游玩时同步显示');};
 actions['ih-clear-expansions']=()=>{$$('[data-ih-expansion]').forEach(el=>el.checked=false);syncExpansionChoices();};
 actions['ih-all-expansions']=()=>{$$('[data-ih-expansion]').forEach(el=>el.checked=true);syncExpansionChoices();};
+actions['mr-choose-roles']=()=>{
+  try{
+    const options={packs:$$('[data-mr-expansion]:checked').map(el=>el.dataset.mrExpansion),map:$('#mr-map').value};
+    openingDraft=game().configureOpening(saveEditorDraft(state),options);
+    openModal(`<h2>选择冒险者</h2><p class="modal-lead">${options.map==='tower'?'高塔':'地牢'} · ${options.packs.length?`已启用 ${options.packs.length} 个 DLC`:'仅基础版'}。选择角色后开始新一局。</p>${openingChoicesHTML(openingDraft)}<button class="full-width quiet" data-action="mr-back-expansions">返回 DLC 选择</button>`,true);
+    $('#modal').dataset.kind='opening-choice';
+  }catch(error){notify(error.message);}
+};
+actions['mr-back-expansions']=()=>{
+  openModal(game().expansionChoiceHTML(openingDraft||saveEditorDraft(state)),true);
+  $('#modal').dataset.kind='expansion-choice';
+};
 actions['ih-choose-roles']=()=>{
   try{
     const options={packs:$$('[data-ih-expansion]:checked').map(el=>el.dataset.ihExpansion),adventure:$('#ih-adventure').value,dungeon:$('#ih-dungeon').value};

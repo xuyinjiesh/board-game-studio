@@ -194,3 +194,18 @@ dialog:has(.deck-search-list){width:640px}
 #card-edge-guides>i{position:absolute;height:2px;transform-origin:0 50%;background:#f4d995;box-shadow:0 0 0 1px #193d2c88,0 0 8px #f4d99577}
 #card-snap-preview.edge-alignment{border:2px dashed #f1d493;background:transparent;box-shadow:none}
 #card-snap-preview.edge-alignment>span{font-size:12px;padding:6px 10px}
+
+/* Mini Rogue: original printed panels and compact wooden track markers. */
+#app[data-game="mini-rogue"][data-mode] #game-controls{top:auto;bottom:16px;max-width:calc(100% - 32px)}
+.mr-toolbar{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:9px;padding:9px 14px;border:1px solid #b6a2cf66;border-radius:9px;background:#30243bed;color:#f5ead5;box-shadow:0 6px 24px #0005;backdrop-filter:blur(12px)}
+.mr-toolbar button{padding:8px 12px;border:1px solid #dbbfdb44;border-radius:5px;font-size:12px;color:inherit;background:#ffffff08}.mr-toolbar button:hover{background:#bb9dc42b}.mr-toolbar button:disabled{opacity:.4;cursor:default}.mr-toolbar>span{font-size:12px;font-variant-numeric:tabular-nums;color:#e7ceb6}
+#app[data-mode] .scene[data-game="mini-rogue"] .mr-zone{display:block;border:0;text-align:left;color:#f1dcc2bb}.mr-zone>span{font-size:20px;letter-spacing:2px}.mr-zone>small{font-size:13px;letter-spacing:.5px}
+.scene[data-game="mini-rogue"] .card:is(:hover,.selected):not(.dragging) .card-lift{transform:none}
+.scene[data-game="mini-rogue"] .token-body{border-radius:4px;border:2px solid #fff9;box-shadow:1px 2px 4px #0008}
+.mr-marker-core{font-size:12px;font-weight:700;color:white;line-height:1;text-shadow:0 1px 2px #0009}.mr-pawn-icon{font-size:23px;line-height:1;color:#fff6cf}
+.scene[data-game="mini-rogue"] .mr-dice-zone>span{font-size:15px;letter-spacing:1px}
+.scene[data-game="mini-rogue"] .die-face:has(.shared-die-image){padding:0;overflow:hidden}.scene[data-game="mini-rogue"] .shared-die-image{width:100%;height:100%;object-fit:cover}
+#app[data-game="mini-rogue"][data-mode="play"] .fixed-position .pile-label{display:block;top:calc(100% + 26px);left:50%;width:150%;max-width:none;transform:translateX(-50%);font-size:16px;line-height:1.5;text-align:center;color:#efe3ce;text-shadow:0 1px 3px #10251d;background:none;border:0}
+#app[data-game="mini-rogue"][data-mode="play"] .fixed-position:has(.empty-pile) .pile-guide{display:block;inset:0;border:2px dashed #d6b99155;border-radius:7px;background:#31243b22}
+#app[data-game="mini-rogue"][data-mode="play"] .fixed-position:has(.empty-pile) .pile-label{top:50%;transform:translate(-50%,-50%);width:90%;font-size:18px}
+@media(max-width:600px){.mr-toolbar{gap:5px;padding:6px}.mr-toolbar button{font-size:11px;padding:6px 8px}.mr-toolbar>span{flex-basis:100%;text-align:center;order:2}}
