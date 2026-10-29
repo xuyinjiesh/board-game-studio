@@ -62,6 +62,7 @@ export function pointOnObject(state,o,x,y){const a=-o.rotation*Math.PI/180,dx=x-
 export function objectsInRect(state,rect){
   const cx=(rect.left+rect.right)/2,cy=(rect.top+rect.bottom)/2,hw=(rect.right-rect.left)/2,hh=(rect.bottom-rect.top)/2;
   return state.objects.filter(o=>{
+    if(state.mode==='play'&&o.handId)return false;
     // The board is the surface underneath the pieces; select it explicitly.
     if(!canMoveObject(o,state.mode)||o.type==='board')return false;
     const {w,h}=dimensions(state,o),angle=o.rotation*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),dx=o.x-cx,dy=o.y-cy;
@@ -143,11 +144,17 @@ export function validateSession(raw){
   const assets=new Map();
   const safeImage=s=>typeof s==='string'&&s.length<12000000&&(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(s)||/^\/assets\/[A-Za-z0-9/_-]+\.(webp|png|jpg|jpeg)$/.test(s));
   const finite=(v,min,max)=>typeof v==='number'&&Number.isFinite(v)&&v>=min&&v<=max;
+  if(raw.handZone!==undefined){
+    const h=raw.handZone;
+    if(!h||typeof h.id!=='string'||!h.id||h.id.length>100||typeof h.name!=='string'||!h.name.trim()||h.name.length>100||!Number.isInteger(h.capacity)||!finite(h.capacity,1,500)||h.acceptGroup!==undefined&&(typeof h.acceptGroup!=='string'||h.acceptGroup.length>100)||h.suits!==undefined&&(!Array.isArray(h.suits)||h.suits.length>100||h.suits.some(s=>typeof s!=='string'||s.length>100)))throw new Error('手牌区设置无效');
+  }
   for(const a of raw.assets){if(!a||typeof a.id!=='string'||assets.has(a.id)||!['card','board','token'].includes(a.type)||typeof a.name!=='string'||a.name.length>100||!safeImage(a.front)||a.back&&!safeImage(a.back)||!finite(a.width,20,2000)||!finite(a.height,20,2000))throw new Error('存档中的资产无效');assets.set(a.id,a);}
   const ids=new Set(),setupKeys=new Set(),drawKeys=new Set();
   for(const o of raw.objects){
     if(!o||typeof o.id!=='string'||ids.has(o.id)||!['card','deck','die','token','board','deal'].includes(o.type)||!finite(o.x,-10000,10000)||!finite(o.y,-10000,10000)||!finite(o.z,-10000,1000000)||!finite(o.rotation,-100000,100000))throw new Error('存档中的物件无效');
     ids.add(o.id);
+    if(o.handId!==undefined&&(!raw.handZone||o.handId!==raw.handZone.id||!(o.type==='card'||o.type==='deal'&&o.layout==='spread')))throw new Error('手牌归属无效');
+    if(o.handOrder!==undefined&&(!o.handId||!Number.isInteger(o.handOrder)||!finite(o.handOrder,0,1000)))throw new Error('手牌顺序无效');
     if(['card','board'].includes(o.type)&&!assets.has(o.assetId))throw new Error('存档缺少图片资产');
     if(o.type==='deck'&&(!Array.isArray(o.cards)||o.cards.length>500||o.cards.some(id=>!assets.has(id))))throw new Error('牌堆数据无效');
     if(o.cardFaces!==undefined&&(o.type!=='deck'||!Array.isArray(o.cardFaces)||o.cardFaces.length!==o.cards.length||o.cardFaces.some(face=>typeof face!=='boolean')||o.cards.length&&o.cardFaces.at(-1)!==(o.faceUp!==false)))throw new Error('牌堆卡牌朝向无效');
@@ -240,7 +247,7 @@ export function applySetup(state,setup=state.setup||state.initialSetup,random=Ma
     if(layout==='deck')dealt.push({...placement,...baseObject('deck',slot.x,slot.y,slot.z),locked:slot.locked,rotation:slot.rotation,cards:cards.reverse(),name:slot.name,faceUp:slot.setupFace==='random'?random()>=.5:slot.faceUp!==false});
     else for(const [i,assetId] of cards.entries()){
       const angle=slot.rotation*Math.PI/180;
-      dealt.push({...placement,...baseObject('card',slot.x+i*slot.spacing*Math.cos(angle),slot.y+i*slot.spacing*Math.sin(angle),slot.z+i/1000),locked:slot.locked,rotation:slot.rotation,assetId,faceUp:slot.setupFace==='random'?random()>=.5:slot.faceUp!==false});
+      dealt.push({...placement,...baseObject('card',slot.x+i*slot.spacing*Math.cos(angle),slot.y+i*slot.spacing*Math.sin(angle),slot.z+i/1000),locked:slot.locked,rotation:slot.rotation,assetId,faceUp:slot.setupFace==='random'?random()>=.5:slot.faceUp!==false,...(slot.handId?{handOrder:(slot.handOrder??0)+i}:{})});
     }
   }
   return {...state,objects:[...objects.filter(o=>o.type!=='deal'&&!(o.type==='deck'&&o.setupHideEmpty&&!o.cards.length)),...dealt]};

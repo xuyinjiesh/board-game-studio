@@ -1,4 +1,33 @@
-import {pointOnObject,nextZ,canMoveObject,canReceiveCards,mergeCards} from './model.js';
+import {pointOnObject,dimensions,nextZ,canMoveObject,canReceiveCards,mergeCards} from './model.js';
+
+// Align parallel card edges without centering the cards or making a pile.
+// An axis that is outside the tolerance keeps its original offset, allowing
+// a ruler to slide over a fief while its left/right edges stay aligned.
+export function cardEdgePlacement(state,moving,{threshold=16}={}){
+  if(!state.settings.snap||moving?.type!=='card'||moving.locked||moving.handId&&state.mode==='play')return null;
+  let best=null;
+  const mw=dimensions(state,moving);
+  for(const target of state.objects){
+    if(target.id===moving.id||target.type!=='card'||target.handId&&state.mode==='play')continue;
+    const delta=((moving.rotation-target.rotation+180)%360+360)%360-180,turn=Math.round(delta/90);
+    if(Math.abs(delta-turn*90)>5)continue;
+    const p=pointOnObject(state,target,moving.x,moving.y),tw=dimensions(state,target);
+    const w=Math.abs(turn)%2?mw.h:mw.w,h=Math.abs(turn)%2?mw.w:mw.h;
+    if(Math.abs(p.px)>(tw.w+w)/2+threshold||Math.abs(p.py)>(tw.h+h)/2+threshold)continue;
+    const nearest=(value,edges)=>edges.map(([position,edge])=>({position,edge,gap:Math.abs(value-position)})).filter(e=>e.gap<=threshold).sort((a,b)=>a.gap-b.gap)[0];
+    const sx=nearest(p.px,[[-tw.w/2+w/2,-tw.w/2],[tw.w/2-w/2,tw.w/2],[-tw.w/2-w/2,-tw.w/2],[tw.w/2+w/2,tw.w/2]]);
+    const sy=nearest(p.py,[[-tw.h/2+h/2,-tw.h/2],[tw.h/2-h/2,tw.h/2],[-tw.h/2-h/2,-tw.h/2],[tw.h/2+h/2,tw.h/2]]);
+    if(!sx&&!sy)continue;
+    const x=sx?.position??p.px,y=sy?.position??p.py,a=target.rotation*Math.PI/180;
+    const world=(x,y)=>({x:target.x+x*Math.cos(a)-y*Math.sin(a),y:target.y+x*Math.sin(a)+y*Math.cos(a)});
+    const guides=[];
+    if(sx)guides.push({from:world(sx.edge,Math.min(-tw.h/2,y-h/2)-18),to:world(sx.edge,Math.max(tw.h/2,y+h/2)+18)});
+    if(sy)guides.push({from:world(Math.min(-tw.w/2,x-w/2)-18,sy.edge),to:world(Math.max(tw.w/2,x+w/2)+18,sy.edge)});
+    const distance=Math.hypot(p.px,p.py);
+    if(!best||distance<best.distance)best={...world(x,y),rotation:((target.rotation+turn*90)%360+360)%360,kind:'edge',guides,distance};
+  }
+  return best;
+}
 
 export const DECK_HOLD_MS=500;
 export const DECK_BOTTOM_HOVER_MS=800;
@@ -57,7 +86,7 @@ export const isPanGesture=(button,spaceDown)=>button===1||(button===0&&spaceDown
 
 export function findCardSnapTarget(state,moving,excludedIds=[moving?.id]){
   if(!canMoveObject(moving,state.mode)||moving.fixedPosition||!['card','deck'].includes(moving.type))return null;
-  return state.objects.filter(o=>!excludedIds.includes(o.id)&&!o.locked&&['card','deck'].includes(o.type)&&o.snapCards!==false&&(o.type!=='deck'||canReceiveCards(o,moving.type==='deck'?moving.cards.length:1)))
+  return state.objects.filter(o=>!(state.mode==='play'&&o.handId)&&!excludedIds.includes(o.id)&&!o.locked&&['card','deck'].includes(o.type)&&o.snapCards!==false&&(o.type!=='deck'||canReceiveCards(o,moving.type==='deck'?moving.cards.length:1)))
     .sort((a,b)=>Number(!!b.fixedPosition)-Number(!!a.fixedPosition)||Number(b.type==='deck')-Number(a.type==='deck')||b.z-a.z)
     .find(o=>{
       const p=pointOnObject(state,o,moving.x,moving.y);

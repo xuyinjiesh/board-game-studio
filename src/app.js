@@ -12,6 +12,7 @@ import {wheelIntent,isPanGesture,cardDropPlan,snapCardOnto,startDeckMenuPress,cr
 import {openingHTML as openingPropertiesHTML,drawTargetHTML,openingChoicesHTML,pileSettingsHTML,sizeSettingsHTML} from './opening-editor.js';
 import {nameMatches,libraryName} from './library.js';
 import {examples} from './projects.js';
+import {isHandCard,handCards,acceptsHandCard,leaveHand,insertHandCard,sortHand,handFan} from './hands.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -29,6 +30,13 @@ function beginDeckMenuPress(pending,deck){
 let activeDrawer=state.mode==='edit'?'assets':null,modeRevealTimer;
 const scene=$('#scene'),viewport=$('#viewport'),objects=$('#objects');
 const objectNodes=new Map();
+const edgeGuides=document.createElement('div');edgeGuides.id='card-edge-guides';edgeGuides.hidden=true;scene.append(edgeGuides);
+const handView=document.createElement('section');handView.id='hand-zone';handView.hidden=true;
+handView.setAttribute('aria-label','手牌区');
+handView.innerHTML='<div id="hand-cards"></div><div class="hand-footer"><span class="hand-name"></span><strong id="hand-count" role="status"></strong><div class="hand-sort"><button data-hand-sort="suit" title="按花色整理手牌">花色</button><button data-hand-sort="number" title="按点数整理手牌">点数</button></div></div><span class="hand-empty">将卡牌拖到这里加入手牌</span>';
+$('#app').append(handView);
+const handObjects=handView.querySelector('#hand-cards');
+let handLayouts=new Map();
 const icons={flip:'⤾',rotate:'↻',draw:'↗',shuffle:'⤨',stack:'▱',lock:'⌑',inspect:'⤢',delete:'×'};
 function notify(text){$('#toast').textContent=text;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),3200);}
 function play(kind,options){sound(kind,state.settings.sound,options);}
@@ -79,10 +87,20 @@ function tokenSVG(kind,o){const shared=sharedToken(kind);if(shared)return `<img 
 function tokenFace(o){if(o.kind==='custom'){const image=texture(o.assetId,o.faceUp!==false);return image?cardFace(image,o.faceUp===false):'<span class="token-back" aria-label="背面">●</span>';}return o.faceUp===false?'<span class="token-back" aria-label="背面">●</span>':tokenSVG(o.kind,o);}
 function nodeSignature(o){return JSON.stringify([o.type,o.skin,o.assetId,o.cards?.length,o.cards?.at(-1),o.faces,o.kind,o.name,o.maxCards,o.fixedPosition,o.type==='token'?[o.value,o.faceUp]:null,o.type==='deal'?[o.sourceKey,o.count,o.layout,o.spacing]:null]);}
 function syncObjects(){
+  const focusedHand=handObjects.contains(document.activeElement)?document.activeElement:null;
+  handView.hidden=state.mode!=='play'||!state.handZone||!!state.awaitingOpening;
+  const inHand=handCards(state),fan=handFan(inHand.length,handView.clientWidth||720);
+  handLayouts=new Map(inHand.map((o,i)=>[o.id,fan[i]]));
+  handView.classList.toggle('empty',inHand.length===0);
+  handView.querySelector('.hand-name').textContent=state.handZone?.name||'手牌';
+  handView.querySelector('#hand-count').textContent=`${inHand.length}/${state.handZone?.capacity||8}`;
+  handView.querySelector('#hand-count').setAttribute('aria-label',`手牌 ${inHand.length} 张，参考上限 ${state.handZone?.capacity||8} 张`);
   const present=new Set(state.objects.map(o=>o.id));
   for(const [id,node] of objectNodes)if(!present.has(id)){node.remove();objectNodes.delete(id);}
   for(const o of state.objects){
     let node=objectNodes.get(o.id);if(!node){node=document.createElement('div');node.dataset.id=o.id;node.tabIndex=0;node.setAttribute('role','button');objects.append(node);objectNodes.set(o.id,node);}
+    const held=state.mode==='play'&&isHandCard(state,o),parent=held?handObjects:objects;
+    if(node.parentNode!==parent)parent.append(node);
     const signature=nodeSignature(o);
     if(node.dataset.signature!==signature){
       if(o.type==='card')node.innerHTML=`<div class="card-shadow"></div><div class="card-lift"><div class="card-flipper"><div class="card-side card-front">${cardFace(texture(o.assetId,true))}</div><div class="card-side card-back">${cardFace(texture(o.assetId,false),true)}</div></div></div>`;
@@ -97,8 +115,9 @@ function syncObjects(){
     const {w,h}=dimensions(state,o);
     node.dataset.gameRole=o.ihRole||'';
     node.dataset.assetGroup=assetFor(state,o.assetId)?.group||'';
-    node.className=`table-object ${o.type} ${o.type==='deal'&&o.layout==='deck'?'deck generated-pile':''} ${o.fixedPosition?'fixed-position':''} ${sharedToken(o.kind)?'shared-token':''} ${o.type==='token'&&o.kind?.startsWith('ih-')?'ih-square-marker':''} ${o.faceUp===false?'face-down':''} ${selected.has(o.id)?'selected':''} ${o.locked?'locked':''} ${drag?.ids?.includes(o.id)?'dragging':''} ${rolling.has(o.id)?'rolling':''}`;
+    node.className=`table-object ${o.type} ${held?'in-hand':''} ${o.type==='deal'&&o.layout==='deck'?'deck generated-pile':''} ${o.fixedPosition?'fixed-position':''} ${sharedToken(o.kind)?'shared-token':''} ${o.type==='token'&&o.kind?.startsWith('ih-')?'ih-square-marker':''} ${o.faceUp===false?'face-down':''} ${selected.has(o.id)?'selected':''} ${o.locked?'locked':''} ${drag?.ids?.includes(o.id)?'dragging':''} ${rolling.has(o.id)?'rolling':''}`;
     node.style.cssText=`--x:${o.x}px;--y:${o.y}px;--angle:${o.rotation}deg;--w:${w}px;--h:${h}px;--object-color:${COLORS[o.color]||(/^#[0-9a-f]{6}$/i.test(o.color)?o.color:'#b86231')};z-index:${objectLayer(o)};`;
+    if(held){const f=handLayouts.get(o.id);node.style.cssText+=`--hand-x:${f.x}px;--hand-y:${f.y}px;--hand-angle:${f.angle}deg;--hand-w:${f.width}px;--hand-h:${f.height}px;z-index:${f.z};`;node.setAttribute('aria-pressed',String(selected.has(o.id)));}else node.removeAttribute('aria-pressed');
     if(o.type==='die')updateDie(node,o);
     if(o.type==='card'){
       node.querySelector('.card-front').setAttribute('aria-hidden',String(o.faceUp===false));
@@ -107,6 +126,10 @@ function syncObjects(){
     node.setAttribute('aria-label',`${objectName(o)}${o.type==='die'?'，点数 '+o.value:o.type==='token'&&Number.isFinite(o.value)?'，数值 '+o.value:''}${o.fixedPosition?'，固定牌位':''}${o.locked?'，已锁定':''}`);
     if(o.type==='deck'){const img=node.querySelector('.deck-top img');if(img)img.src=texture(o.cards.at(-1),o.faceUp);}
   }
+  if(!handView.hidden)for(const [i,o] of inHand.entries()){
+    const node=objectNodes.get(o.id);if(handObjects.children[i]!==node)handObjects.insertBefore(node,handObjects.children[i]||null);
+  }
+  if(focusedHand?.isConnected&&focusedHand.parentNode===handObjects&&document.activeElement!==focusedHand)focusedHand.focus({preventScroll:true});
 }
 function objectLayer(o){return o.type==='board'?-100+o.z/1000000:['die','token'].includes(o.type)?1000000+o.z:o.z;}
 function updateDie(node,o){const face=node.querySelector('.die-face');if(face&&face.dataset.value!==String(o.value)){face.innerHTML=dieVisual(o);face.dataset.value=String(o.value);}}
@@ -141,7 +164,7 @@ function setDrawer(name){if(name&&innerWidth<900){selected.clear();renderSelecti
 function setMode(mode){closeDeckMenu();cancelDrawTarget();if(mode===state.mode)return;if(mode==='play'&&state.setupProfiles?.length>1){chooseOpening();return;}let next;try{next=mode==='play'?startOpening(state):openEditor(state);}catch(error){notify(error.message);return;}checkpoint();state=next;selected.clear();activeDrawer=mode==='edit'?'assets':null;$('#mode-toggle').classList.remove('revealed');render();fit();save();}
 function revealEditor(){clearTimeout(modeRevealTimer);for(const el of [$('#mode-toggle'),$('#play-plaza')])el.classList.add('revealed');modeRevealTimer=setTimeout(()=>{for(const el of [$('#mode-toggle'),$('#play-plaza')])el.classList.remove('revealed');},3500);}
 function renderSelection(){
-  for(const [id,node]of objectNodes){node.classList.toggle('selected',selected.has(id));node.classList.toggle('pile-selected',selected.has(id)&&currentDeckScope()==='pile');}
+  for(const [id,node]of objectNodes){node.classList.toggle('selected',selected.has(id));node.classList.toggle('pile-selected',selected.has(id)&&currentDeckScope()==='pile');if(node.classList.contains('in-hand'))node.setAttribute('aria-pressed',String(selected.has(id)));}
   renderDeckDrawTools();
   renderDrawers();
 }
@@ -255,11 +278,57 @@ function renderInspector(){
 }
 function settingsHTML(){return `<div class="project-fields"><h3>项目资料</h3><label>游戏名称<input data-meta="name" maxlength="100" value="${escape(state.name)}"></label><label>一句话介绍<textarea data-meta="description" maxlength="1000" rows="2">${escape(state.meta?.description)}</textarea></label><div class="project-field-pair"><label>人数<input data-meta="players" maxlength="100" placeholder="例如 2–4 人" value="${escape(state.meta?.players)}"></label><label>时长<input data-meta="duration" maxlength="100" placeholder="例如 20 分钟" value="${escape(state.meta?.duration)}"></label></div><label>规则说明<textarea data-meta="rules" maxlength="20000" rows="4" placeholder="写下你的游戏玩法…">${escape(state.meta?.rules)}</textarea></label><button class="full-width quiet" data-action="plaza">返回作品广场</button></div><div class="inspector-section table-settings"><h3>桌布与交互</h3><label class="toggle-row"><span>操作音效</span><input type="checkbox" data-setting="sound" ${state.settings.sound?'checked':''}><i></i></label><label class="toggle-row"><span>显示网格</span><input type="checkbox" data-setting="grid" ${state.settings.grid?'checked':''}><i></i></label><label class="toggle-row"><span>${escape(game()?.snapLabel||'网格吸附')}</span><input type="checkbox" data-setting="snap" ${state.settings.snap?'checked':''}><i></i></label><label class="range-row"><span>摆放自然错位 <b>${state.settings.scatter}°</b></span><input type="range" min="0" max="12" value="${state.settings.scatter}" data-setting="scatter"></label><div class="theme-picker">${[['forest','苔绿'],['linen','亚麻'],['night','深夜']].map(([v,n])=>`<button data-theme="${v}" class="${state.settings.theme===v?'active':''}" title="${n}"><i class="${v}"></i>${n}</button>`).join('')}</div></div>`;}
 function transformScene(){scene.style.transform=`translate(${pan.x}px,${pan.y}px) scale(${zoom})`;$('#zoom-label').textContent=`${Math.round(zoom*100)}%`;renderDeckDrawTools();}
-function fitObjects(items){const r=viewport.getBoundingClientRect();if(!r.width||!r.height)return;if(!items.length){zoom=1;pan={x:r.width/2-720,y:r.height/2-500};transformScene();return;}const bounds=items.map(o=>{const {w,h}=dimensions(state,o);const a=o.rotation*Math.PI/180,hw=(Math.abs(Math.cos(a))*w+Math.abs(Math.sin(a))*h)/2,hh=(Math.abs(Math.sin(a))*w+Math.abs(Math.cos(a))*h)/2;return {left:o.x-hw,right:o.x+hw,top:o.y-hh,bottom:o.y+hh};});const left=Math.min(...bounds.map(b=>b.left)),right=Math.max(...bounds.map(b=>b.right)),top=Math.min(...bounds.map(b=>b.top)),bottom=Math.max(...bounds.map(b=>b.bottom));zoom=Math.max(.2,Math.min(1.2,(r.width-100)/(right-left),(r.height-140)/(bottom-top)));pan={x:r.width/2-(left+right)/2*zoom,y:r.height/2-(top+bottom)/2*zoom};transformScene();}
+function fitObjects(items){
+  const r=viewport.getBoundingClientRect();if(!r.width||!r.height)return;
+  const height=r.height-(handView.hidden?0:handView.offsetHeight+30);
+  if(state.mode==='play')items=items.filter(o=>!o.handId);
+  if(!items.length){zoom=1;pan={x:r.width/2-720,y:height/2-500};transformScene();return;}
+  const bounds=items.map(o=>{const {w,h}=dimensions(state,o),a=o.rotation*Math.PI/180,hw=(Math.abs(Math.cos(a))*w+Math.abs(Math.sin(a))*h)/2,hh=(Math.abs(Math.sin(a))*w+Math.abs(Math.cos(a))*h)/2;return {left:o.x-hw,right:o.x+hw,top:o.y-hh,bottom:o.y+hh};});
+  const left=Math.min(...bounds.map(b=>b.left)),right=Math.max(...bounds.map(b=>b.right)),top=Math.min(...bounds.map(b=>b.top)),bottom=Math.max(...bounds.map(b=>b.bottom));
+  zoom=Math.max(.2,Math.min(1.2,(r.width-100)/(right-left),(height-(handView.hidden?140:100))/(bottom-top)));
+  pan={x:r.width/2-(left+right)/2*zoom,y:height/2-(top+bottom)/2*zoom};transformScene();
+}
 function fitTable(items){const bounds=game()?.tableBounds;fitObjects(bounds?[...items,{...bounds,rotation:0}]:items);}
 function fit(){fitTable(state.objects);}
 function resetView(){fitTable((state.setup||state.initialSetup)?.objects||state.objects);}
-function snapObject(o){if(o.type==='token'&&game()?.onTokenDrop){game().onTokenDrop(state,o);return;}if(!state.settings.snap)return;if(game()?.onDrop){game().onDrop(state,o);return;}o.x=Math.round(o.x/40)*40;o.y=Math.round(o.y/40)*40;}
+function snapObject(o){if(o.type==='token'&&game()?.onTokenDrop){game().onTokenDrop(state,o);return;}if(!state.settings.snap)return;if(game()?.onDrop){game().onDrop(state,o,{zoom});return;}o.x=Math.round(o.x/40)*40;o.y=Math.round(o.y/40)*40;}
+
+function overHand(e,o){
+  if(handView.hidden||!acceptsHandCard(state,o))return false;
+  const r=handView.getBoundingClientRect();
+  return e.clientX>=r.left-20&&e.clientX<=r.right+20&&e.clientY>=r.top-24&&e.clientY<=r.bottom+24;
+}
+function handInsertAt(clientX,id){
+  const cards=handCards(state).filter(o=>o.id!==id),fan=handFan(cards.length,handView.clientWidth),r=handView.getBoundingClientRect();
+  const i=fan.findIndex(p=>clientX<r.left+r.width/2+p.x);return i<0?cards.length:i;
+}
+handView.addEventListener('pointerdown',e=>{
+  if(e.button!==0||drag||spaceDown)return;
+  const o=state.objects.find(o=>o.id===e.target.closest('.table-object')?.dataset.id);
+  if(!o)return;
+  e.preventDefault();e.stopPropagation();objectNodes.get(o.id)?.focus({preventScroll:true});select(o,e.shiftKey);
+  if(o.locked||e.shiftKey)return;
+  drag={kind:'hand',pointerId:e.pointerId,sx:e.clientX,sy:e.clientY,heldId:o.id,ids:[o.id],moved:false};
+  viewport.setPointerCapture(e.pointerId);
+});
+handView.addEventListener('click',e=>{
+  const by=e.target.closest('[data-hand-sort]')?.dataset.handSort;
+  if(by){mutate(()=>sortHand(state,by),{audio:'spread'});}
+});
+handView.addEventListener('contextmenu',e=>{
+  const o=state.objects.find(o=>o.id===e.target.closest('.table-object')?.dataset.id);if(!o)return;
+  e.preventDefault();if(drag)endDrag({pointerId:drag.pointerId},true);select(o);inspect();
+});
+handView.addEventListener('wheel',e=>e.preventDefault(),{passive:false});
+handView.addEventListener('keydown',e=>{
+  const o=state.objects.find(o=>o.id===e.target.closest('.table-object')?.dataset.id);if(!o)return;
+  if(e.key==='Enter'){e.preventDefault();select(o);}
+  if(e.altKey&&['ArrowLeft','ArrowRight'].includes(e.key)&&!o.locked){
+    e.preventDefault();e.stopPropagation();const index=handCards(state).indexOf(o);
+    mutate(()=>insertHandCard(state,o,index+(e.key==='ArrowRight'?1:-1)));
+  }
+});
+new ResizeObserver(()=>{if(!handView.hidden)syncObjects();}).observe(handView);
 
 function toWorld(clientX,clientY){const r=viewport.getBoundingClientRect();return {x:(clientX-r.left-pan.x)/zoom,y:(clientY-r.top-pan.y)/zoom};}
 function zoomAt(factor,cx,cy){const r=viewport.getBoundingClientRect(),x=cx??r.width/2,y=cy??r.height/2;const next=Math.min(2,Math.max(.2,zoom*factor));pan.x=x-(x-pan.x)*next/zoom;pan.y=y-(y-pan.y)*next/zoom;zoom=next;transformScene();}
@@ -540,6 +609,12 @@ viewport.addEventListener('pointerdown',e=>{
 viewport.addEventListener('pointermove',e=>{
   if(!drag)return;const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
   if(!drag.moved&&Math.hypot(dx,dy)<3)return;
+  if(drag.kind==='hand'){
+    const o=state.objects.find(o=>o.id===drag.heldId);if(!o)return;
+    checkpoint();leaveHand(state,o);Object.assign(o,toWorld(e.clientX,e.clientY),{rotation:0,z:nextZ(state)});
+    Object.assign(drag,{kind:'object',sx:e.clientX,sy:e.clientY,starts:[{id:o.id,x:o.x,y:o.y,rotation:0}],moved:true,checkpointed:true});
+    playObjects([o],'pickup');render();updateCardSnapPreview();handView.classList.toggle('drop-active',overHand(e,o));return;
+  }
   if(drag.kind==='draw-target'){
     if(!drag.moved){checkpoint();drag.moved=true;}
     const owner=state.objects.find(o=>o.id===drag.ownerId);
@@ -566,19 +641,30 @@ viewport.addEventListener('pointermove',e=>{
   const moveX=Math.max(...drag.starts.map(o=>-10000-o.x),Math.min(dx/zoom,...drag.starts.map(o=>10000-o.x)));
   const moveY=Math.max(...drag.starts.map(o=>-10000-o.y),Math.min(dy/zoom,...drag.starts.map(o=>10000-o.y)));
   for(const start of drag.starts){const o=state.objects.find(x=>x.id===start.id);if(!o)continue;o.x=start.x+moveX;o.y=start.y+moveY;const node=objectNodes.get(o.id);node?.classList.add('dragging');node?.style.setProperty('--x',`${o.x}px`);node?.style.setProperty('--y',`${o.y}px`);if(node)node.style.zIndex=objectLayer(o);}
+  const intoHand=drag.ids.length===1&&overHand(e,state.objects.find(o=>o.id===drag.ids[0]));
+  handView.classList.toggle('drop-active',intoHand);
+  if(intoHand){$('#card-snap-preview').hidden=true;edgeGuides.hidden=true;drag.bottomHover?.update(null);return;}
   updateCardSnapPreview(e.altKey);
 });
 function updateCardSnapPreview(merge=drag?.alt){
   const preview=$('#card-snap-preview');
+  edgeGuides.hidden=true;preview.classList.remove('edge-alignment');
   if(!drag||drag.kind!=='object'||!drag.moved||drag.ids.length!==1){drag?.bottomHover?.update(null);preview.hidden=true;return;}
   drag.alt=!!merge;
   const moving=state.objects.find(o=>o.id===drag.ids[0]);
-  const {placement,target}=cardDropPlan(state,moving,drag.ids,{forceMerge:merge,placementFor:game()?.cardPlacement});
+  const {placement,target}=cardDropPlan(state,moving,drag.ids,{forceMerge:merge,placementFor:(s,o)=>game()?.cardPlacement?.(s,o,{zoom})});
   drag.snapTargetId=target?.id;
   if(!drag.bottomHover){const current=drag;drag.bottomHover=createDeckBottomHover(()=>{if(drag===current)updateCardSnapPreview();});}
   drag.bottomHover.update(target?.type==='deck'&&target.maxCards!==1?target.id:null);
   const bottom=!!target&&drag.bottomHover.readyFor(target.id);
   preview.classList.toggle('bottom-drop',bottom);
+  if(placement?.kind==='edge'){
+    const {w,h}=dimensions(state,moving);preview.hidden=false;preview.classList.add('edge-alignment');
+    preview.style.cssText=`--x:${placement.x}px;--y:${placement.y}px;--w:${w}px;--h:${h}px;--angle:${placement.rotation}deg`;
+    preview.querySelector('span').textContent='松手按边对齐';
+    edgeGuides.innerHTML=placement.guides.map(({from,to})=>`<i style="left:${from.x}px;top:${from.y}px;width:${Math.hypot(to.x-from.x,to.y-from.y)}px;transform:rotate(${Math.atan2(to.y-from.y,to.x-from.x)}rad)"></i>`).join('');
+    edgeGuides.hidden=false;return;
+  }
   preview.hidden=!!placement||!target;if(preview.hidden)return;
   const {w,h}=dimensions(state,target);
   preview.style.cssText=`--x:${target.x}px;--y:${target.y}px;--w:${w}px;--h:${h}px;--angle:${target.rotation}deg`;
@@ -597,6 +683,9 @@ function endDrag(e,cancelled=false){
   previous.press?.cancel();
   objectNodes.get(previous.deckId)?.classList.remove('deck-pressing','deck-held','dragging');
   $('#card-snap-preview').hidden=true;
+  edgeGuides.hidden=true;
+  handView.classList.remove('drop-active');
+  if(previous.kind==='hand')return;
   if(previous.kind==='draw-target'){if(previous.moved){if(cancelled)state=JSON.parse(history.pop());render();save();}return;}
   if(previous.kind==='deck-menu'){if(cancelled)closeDeckMenu();renderDeckDrawTools();return;}
   if(previous.kind==='deck-press'){renderDeckDrawTools();return;}
@@ -609,10 +698,14 @@ function endDrag(e,cancelled=false){
   if(previous.moved){
     for(const cue of new Set(state.objects.filter(o=>previous.ids.includes(o.id)).map(o=>objectSound(o,'pickup'))))stopSound(cue);
     if(cancelled){state=JSON.parse(history.pop());render();return;}
+    if(previous.ids.length===1){
+      const o=state.objects.find(x=>x.id===previous.ids[0]);
+      if(overHand(e,o)&&insertHandCard(state,o,handInsertAt(e.clientX,o.id))){selected=new Set([o.id]);playObjects([o]);render();save();return;}
+    }
     let didStack=false;
     if(previous.ids.length===1){
       const o=state.objects.find(x=>x.id===previous.ids[0]);
-      const {placement,target}=cardDropPlan(state,o,previous.ids,{forceMerge:e.altKey??previous.alt,placementFor:game()?.cardPlacement});
+      const {placement,target}=cardDropPlan(state,o,previous.ids,{forceMerge:e.altKey??previous.alt,placementFor:(s,o)=>game()?.cardPlacement?.(s,o,{zoom})});
       if(placement){Object.assign(o,{x:placement.x,y:placement.y,rotation:placement.rotation});didStack=true;}
       else if(target&&snapCardOnto(state,o,target,{position:target.id===bottomTargetId?'bottom':'top'})){
         if(target.type==='deck'){selected=new Set([target.id]);if(target.id===bottomTargetId)notify('已放到牌堆最下方');}
@@ -641,7 +734,7 @@ viewport.addEventListener('wheel',e=>{
       if(intent.kind==='rotate'){
         game()?.onRotate?.(draft,token);
         if(!drag?.moved&&token.type==='card'&&game()?.onDrop){
-          game().onDrop(draft,token);
+          game().onDrop(draft,token,{zoom});
           const start=drag?.starts?.find(s=>s.id===token.id);if(start){start.x=token.x;start.y=token.y;}
         }
       }
@@ -669,6 +762,10 @@ document.addEventListener('keydown',e=>{
     if(storeShortcuts({...shortcuts,[id]:key})){e.target.value=key;$('#shortcut-feedback').textContent='已保存快捷键';}return;
   }
   const typing=e.target.closest('input,textarea,select,[contenteditable="true"]');
+  if(!typing&&!$('#modal').open&&!drag&&e.altKey&&!e.ctrlKey&&!e.metaKey&&['ArrowLeft','ArrowRight'].includes(e.key)&&isHandCard(state,primary())&&!primary().locked){
+    e.preventDefault();const o=primary(),index=handCards(state).indexOf(o);
+    mutate(()=>insertHandCard(state,o,index+(e.key==='ArrowRight'?1:-1)));return;
+  }
   const command=primary()?.type==='deck'?deckShortcutAction(shortcutAction(shortcuts,e),currentDeckScope()):shortcutAction(shortcuts,e);
   if(!typing&&!$('#modal').open&&!drag&&['mode','save'].includes(command)){
     e.preventDefault();if(e.repeat)return;

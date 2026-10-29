@@ -11,7 +11,7 @@ export function openingChoicesHTML(state,{editing=false}={}){
     const piece=p.setup.objects.find(o=>o.type==='card'&&o.assetId===id);
     return {asset,src:piece?.faceUp===false&&asset.back?asset.back:asset.front};
   });
-  return `<div class="profile-list${previews.some(Boolean)?' profile-cards':''}">${profiles.map((p,i)=>{
+  return `<div class="profile-list${previews.some(Boolean)?' profile-cards':''}" style="--profile-columns:${Math.max(1,Math.min(4,profiles.length))};--profile-compact-columns:${Math.max(1,Math.min(2,profiles.length))}">${profiles.map((p,i)=>{
     const hero=previews[i];
     return `<button ${editing?'data-edit-profile':'data-start-profile'}="${escape(p.id)}" class="${editing&&p.id===state.activeSetupProfileId?'active':''}">${hero?`<img src="${escape(hero.src)}" alt="${escape(hero.asset.name)}" draggable="false">`:''}<strong>${escape(p.name)}</strong>${p.description?`<small class="profile-description">${escape(p.description)}</small>`:''}<small>${editing?'编辑此方案的桌面 ↗':'以此方案开始新一局 ↗'}</small></button>`;
   }).join('')}</div>`;

@@ -1,5 +1,5 @@
 import {assetUrl} from './asset-url.js';
-import {examples,createProject,copyProject,openEditor,startOpening} from './projects.js';
+import {examples,gameFor,createProject,copyProject,openEditor,startOpening} from './projects.js';
 import {projectStore} from './project-store.js';
 import {findLibraryDraft,libraryName} from './library.js';
 import {uid} from './model.js';
@@ -15,7 +15,9 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
     const modal=$('#modal');modal.dataset.kind='library-removal';$('#modal-content').innerHTML=`<h2>${kind==='projects'?'删除草稿':'撤销发布'}？</h2><p class="modal-lead">${escape(entry.session.name)}<br>${kind==='projects'?'只删除本地草稿，作品广场已发布的版本会保留。':'只从作品广场撤下，本地草稿会保留。'}操作后可在当前页面撤销。</p><button class="primary-button" data-confirm-library-removal>${kind==='projects'?'删除草稿':'撤销发布'}</button><button class="full-width quiet" data-cancel-library-removal>取消</button>`;modal.classList.remove('wide');modal.showModal();
   }
   function card(session,type,id){
-    const cards=session.assets.filter(a=>a.type==='card').slice(0,3),image=session.assets.find(a=>a.type==='board'||a.type==='token');
+    const available=session.assets.filter(a=>a.type==='card');
+    const covers=(gameFor(session.gameId)?.coverAssetIds||[]).map(id=>available.find(a=>a.id===id)).filter(Boolean);
+    const cards=(covers.length?covers:available).slice(0,3),image=session.assets.find(a=>a.type==='board'||a.type==='token');
     const art=cards.length?cards.map(a=>'<img src="'+escape(assetUrl(a.front))+'" alt="" loading="lazy">').join(''):image?'<img class="single-cover" src="'+escape(assetUrl(image.front))+'" alt="" loading="lazy">':'<span>◇</span>';
     const attrs='="'+escape(id)+'"';
     const buttons=type==='project'?'<button data-plaza-project'+attrs+'>编辑草稿 <span>↗</span></button>'+(session.mode==='play'?'<button class="secondary" data-resume-project'+attrs+'>继续游玩</button>':''):'<button data-plaza-'+type+attrs+'>开始游玩 <span>↗</span></button><button class="secondary" data-edit-'+type+attrs+'>编辑游戏</button>';

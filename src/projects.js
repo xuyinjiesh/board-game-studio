@@ -2,8 +2,9 @@ import {createSession,validateSession,captureSetup,applySetup,uid} from './model
 import {grove,builtinAssets} from './games/grove.js';
 import {ironHelm} from './games/iron-helm.js';
 import {pocketPaladin} from './games/pocket-paladin.js';
+import {northwood} from './games/for-northwood.js';
 
-export const examples=[grove,ironHelm,pocketPaladin];
+export const examples=[grove,ironHelm,pocketPaladin,northwood];
 export const gameFor=id=>examples.find(game=>game.id===id);
 
 // Old workspaces had an implicit shared Grove asset library. Make it explicit
@@ -118,7 +119,10 @@ export function startOpening(session,profileId=session.activeSetupProfileId,rand
   if(draft.setupProfiles&&!profile)throw new Error('请选择角色开局方案');
   if(profile){draft.activeSetupProfileId=profile.id;draft.setup=structuredClone(profile.setup);}
   delete draft.awaitingOpening;
-  return {...applySetup(draft,draft.setup||draft.initialSetup,random),mode:'play'};
+  const setup=draft.setup||draft.initialSetup;
+  const opening={...applySetup(draft,setup,random),mode:'play'};
+  gameFor(opening.gameId)?.afterOpening?.(opening,setup,random);
+  return opening;
 }
 
 export function makeExhibit(session){
