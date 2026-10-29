@@ -134,3 +134,11 @@ dialog:has(.deck-search-list){width:640px}
 #app .table-object[data-game-role^="dlc-"] .deck-caption{display:block!important;color:#e0d4bd;font-size:14px;letter-spacing:1px;text-shadow:0 1px 3px #000;top:calc(100% + 28px)}
 
 #app .table-object[data-game-role^="dlc-"] .pile-label{display:block!important;position:absolute;top:calc(100% + 28px);left:50%;width:210px;max-width:none;transform:translateX(-50%);padding:0;border:0;background:none;text-align:center;color:#e0d4bd;font-size:16px;line-height:1.4;text-shadow:0 1px 3px #000;pointer-events:none}
+
+/* Pocket Paladin: circular chits and controls clear of the map. */
+#app[data-game="pocket-paladin"][data-mode] #game-controls{top:auto;bottom:16px;max-width:calc(100% - 32px)}
+#app[data-game="pocket-paladin"] .ih-toolbar{flex-wrap:wrap;justify-content:center;gap:8px}
+.scene[data-game="pocket-paladin"] :is(.card,.deck):has(img[src*="/pocket-paladin/enemy-"],img[src*="/pocket-paladin/hero-"]) :is(.card-side,.card-shadow,.deck-top,.deck-layer){border-radius:50%;overflow:hidden}
+.scene[data-game="pocket-paladin"] .card:is(:hover,.selected):not(.dragging) .card-lift{transform:none}
+
+.scene[data-game="pocket-paladin"] .card:has(img[src$="/blue.webp"],img[src$="/black.webp"],img[src$="/purple.webp"],img[src$="/source.webp"]) :is(.card-side,.card-shadow){clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)}

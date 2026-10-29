@@ -1,8 +1,9 @@
 import {createSession,validateSession,captureSetup,applySetup,uid} from './model.js';
 import {grove,builtinAssets} from './games/grove.js';
 import {ironHelm} from './games/iron-helm.js';
+import {pocketPaladin} from './games/pocket-paladin.js';
 
-export const examples=[grove,ironHelm];
+export const examples=[grove,ironHelm,pocketPaladin];
 export const gameFor=id=>examples.find(game=>game.id===id);
 
 // Old workspaces had an implicit shared Grove asset library. Make it explicit

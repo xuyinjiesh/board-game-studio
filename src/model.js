@@ -144,7 +144,7 @@ export function validateSession(raw){
     const pileSettings=o.type==='deck'||o.type==='deal'&&o.layout==='deck';
     if(o.fixedPosition!==undefined&&(!pileSettings||typeof o.fixedPosition!=='boolean'))throw new Error('固定牌位设置无效');
     if(o.maxCards!==undefined&&(!pileSettings||!Number.isInteger(o.maxCards)||o.maxCards<1||o.maxCards>500||(o.type==='deck'?o.cards.length:o.count)>o.maxCards))throw new Error('牌堆容量无效或已超出容量');
-    if(o.snapCards!==undefined&&(!pileSettings||typeof o.snapCards!=='boolean'))throw new Error('牌堆吸附设置无效');
+    if(o.snapCards!==undefined&&(!(pileSettings||o.type==='card')||typeof o.snapCards!=='boolean'))throw new Error('卡牌吸附设置无效');
     const drawOwner=o.type==='deck'||o.type==='deal'&&o.layout==='deck';
     if(o.drawKey!==undefined){if(!drawOwner||typeof o.drawKey!=='string'||!o.drawKey||o.drawKey.length>100||drawKeys.has(o.drawKey))throw new Error('发牌目标编号无效或重复');drawKeys.add(o.drawKey);}
     if(o.drawTarget!==undefined){

@@ -280,12 +280,14 @@ function draw(faceUp,deck=primary(),index=deck?.cards.length-1){
 function renderDeckSearch(){const deck=state.objects.find(o=>o.id===$('#modal').dataset.deckId&&o.type==='deck');$('#modal-content').innerHTML=deck?deckSearchHTML(state,deck):'<h2>牌堆已移除</h2>';}
 function searchDeck(){const deck=primary();if(deck?.type!=='deck'||deck.locked)return;openModal(deckSearchHTML(state,deck));$('#modal').dataset.kind='deck-search';$('#modal').dataset.deckId=deck.id;}
 function roll(){
-  const dice=selection().filter(o=>o.type==='die'&&!o.locked&&!rolling.has(o.id));if(!dice.length)return;
-  checkpoint();for(const d of dice){rolling.add(d.id);d.value=rollDieValue(d);d.rotation+=(Math.random()-.5)*state.settings.scatter*2;}render();play(dice.length>1?'roll-many':'roll');
+  const dice=selection().filter(o=>(o.type==='die'||game()?.canRoll?.(state,o))&&!o.locked&&!rolling.has(o.id));if(!dice.length)return;
+  const oldAngles=new Map(dice.map(o=>[o.id,o.rotation]));
+  checkpoint();for(const d of dice){rolling.add(d.id);if(d.type==='die'){d.value=rollDieValue(d);d.rotation+=(Math.random()-.5)*state.settings.scatter*2;}else game().rollObject(state,d);}render();play(dice.length>1?'roll-many':'roll');
   for(const [i,die]of dice.entries()){
-    const face=objectNodes.get(die.id)?.querySelector('.die-face');if(!face)continue;
+    const face=objectNodes.get(die.id)?.querySelector(die.type==='die'?'.die-face':'.card-lift');if(!face)continue;
     const duration=matchMedia('(prefers-reduced-motion: reduce)').matches?1:650+i*40;
-    face.animate([{transform:'translate(0,0) rotate(0deg)'},{transform:'translate(8px,-7px) rotate(25deg)',offset:.2},{transform:'translate(-7px,2px) rotate(-20deg)',offset:.45},{transform:'translate(3px,-2px) rotate(10deg)',offset:.7},{transform:'translate(0,0) rotate(0deg)'}],{duration,easing:'ease-out'});
+    const spin=720+((die.rotation-oldAngles.get(die.id))%360+360)%360;
+    face.animate(die.type==='die'?[{transform:'translate(0,0) rotate(0deg)'},{transform:'translate(8px,-7px) rotate(25deg)',offset:.2},{transform:'translate(-7px,2px) rotate(-20deg)',offset:.45},{transform:'translate(3px,-2px) rotate(10deg)',offset:.7},{transform:'translate(0,0) rotate(0deg)'}]:[{transform:`translate(0,0) rotate(${-spin}deg)`},{transform:`translate(9px,-10px) rotate(${-spin*.55}deg)`,offset:.35},{transform:'translate(0,0) rotate(0deg)'}],{duration,easing:'ease-out'});
   }
   setTimeout(()=>{dice.forEach(d=>rolling.delete(d.id));render();save();},700+dice.length*40);
 }
@@ -599,7 +601,7 @@ function endDrag(e,cancelled=false){
   else if(previous.deckHeld){for(const o of selection())stopSound(objectSound(o,'pickup'));if(!cancelled)playObjects(selection());renderDeckDrawTools();}
 }
 viewport.addEventListener('pointerup',e=>endDrag(e));viewport.addEventListener('pointercancel',e=>endDrag(e,true));
-viewport.addEventListener('dblclick',e=>{if(spaceDown||e.button!==0||e.target.closest('button:not(.table-object)'))return;const node=e.target.closest('.table-object')||document.elementFromPoint(e.clientX,e.clientY)?.closest('.table-object');if(!node)return;const o=state.objects.find(x=>x.id===node.dataset.id);if(!o)return;if(o.type==='deck'&&deckMenuId===o.id)return;select(o);if(o.type==='deck'){if(currentDeckScope()==='top'&&!o.locked&&o.cards.length)mutate(()=>flipTopCard(o),{audio:'flip'});}else if(['card','token'].includes(o.type))flip();else if(o.type==='die')roll();});
+viewport.addEventListener('dblclick',e=>{if(spaceDown||e.button!==0||e.target.closest('button:not(.table-object)'))return;const node=e.target.closest('.table-object')||document.elementFromPoint(e.clientX,e.clientY)?.closest('.table-object');if(!node)return;const o=state.objects.find(x=>x.id===node.dataset.id);if(!o)return;if(o.type==='deck'&&deckMenuId===o.id)return;select(o);if(o.type==='deck'){if(currentDeckScope()==='top'&&!o.locked&&o.cards.length)mutate(()=>flipTopCard(o),{audio:'flip'});}else if(o.type==='die'||game()?.canRoll?.(state,o))roll();else if(['card','token'].includes(o.type))flip();});
 viewport.addEventListener('wheel',e=>{
   e.preventDefault();
   if(e.target.closest('#game-controls,.view-tools'))return;
