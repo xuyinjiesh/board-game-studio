@@ -39,6 +39,19 @@ export function adjustTokenValue(state,object,delta,adjust){
   else object.value=Math.max(-999,Math.min(999,object.value+delta));
   return object.value!==before;
 }
+export function adjustDieValue(object,delta){
+  if(object?.type!=='die'||object.locked||![1,-1].includes(delta)||!Array.isArray(object.faces))return false;
+  const faces=[...new Set(object.faces)].sort((a,b)=>a-b),index=faces.indexOf(object.value);
+  if(index<0)return false;
+  const value=faces[Math.max(0,Math.min(faces.length-1,index+delta))];
+  if(value===object.value)return false;
+  object.value=value;return true;
+}
+export function rotateHeldObject(object,delta,step=90){
+  if(!object||object.locked||!['card','deck','token','board','deal'].includes(object.type)||![1,-1].includes(delta)||!Number.isFinite(object.rotation)||!Number.isFinite(step)||step<=0||step>360)return false;
+  object.rotation=((Math.round(object.rotation/step)*step+delta*step)%360+360)%360;
+  return true;
+}
 export function createSession(name='未命名游戏'){
   return {version:VERSION,projectId:uid(),gameId:'custom',name,meta:{description:'',players:'',duration:'',rules:''},objects:[],assets:[],settings:{sound:true,grid:false,snap:true,scatter:DEFAULT_SCATTER,scatterDefaultVersion:2,theme:'forest'},mode:'edit',createdAt:Date.now(),initialSetup:{name:'空白开局',randomizeCards:false,shuffleDecks:false,rollDice:false,objects:[]}};
 }
@@ -85,7 +98,8 @@ export function drawDeckCard(state,deck,index,faceUp,destination){
   if(destination.deck){const target=destination.deck;if(target===deck||!canReceiveCards(target,1))throw new Error('目标牌堆无法接收卡牌');const entry=takeDeckCard(deck,index);if(faceUp!==undefined)entry.faceUp=faceUp;appendDeckEntries(target,[entry]);return target;}
   const entry=takeDeckCard(deck,index),card={...baseObject('card',destination.x,destination.y,nextZ(state)),...entry,faceUp:faceUp??entry.faceUp,rotation:destination.rotation??0,...(deck.ihRole&&deck.maxCards===1?{ihRole:deck.ihRole}:{}),...(deck.width?{width:deck.width}:{}),...(deck.height?{height:deck.height}:{})};state.objects.push(card);return card;
 }
-export function mergeCards(state,ids,{targetId}={}){
+export function mergeCards(state,ids,{targetId,position='top'}={}){
+  if(!['top','bottom'].includes(position))return null;
   const selected=state.objects.filter(o=>ids.includes(o.id)&&['card','deck'].includes(o.type)&&!o.locked).sort((a,b)=>a.z-b.z);
   if(selected.length<2)return null;
   const fixed=selected.filter(o=>o.fixedPosition);
@@ -104,7 +118,9 @@ export function mergeCards(state,ids,{targetId}={}){
       for(const o of state.objects)if(o.drawTarget?.mode==='deck'&&incomingKeys.has(o.drawTarget.deckKey))o.drawTarget.deckKey=deck.drawKey;
       if(deck.drawTarget?.mode==='deck'&&deck.drawTarget.deckKey===deck.drawKey)delete deck.drawTarget;
     }
-    appendDeckEntries(deck,incoming.flatMap(o=>o.type==='deck'?deckEntries(o):[{assetId:o.assetId,faceUp:o.faceUp!==false}]));
+    const entries=incoming.flatMap(o=>o.type==='deck'?deckEntries(o):[{assetId:o.assetId,faceUp:o.faceUp!==false}]);
+    if(position==='bottom')replaceDeckEntries(deck,[...entries,...deckEntries(deck)]);
+    else appendDeckEntries(deck,entries);
     state.objects=state.objects.filter(o=>!incoming.includes(o));
     return deck;
   }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {baseObject,createSession,deckEntries,replaceDeckEntries,drawFromDeck,shuffleDeck,validateSession} from '../src/model.js';
-import {findCardSnapTarget,snapCardOnto} from '../src/interactions.js';
+import {findCardSnapTarget,snapCardOnto,createDeckBottomHover,DECK_BOTTOM_HOVER_MS} from '../src/interactions.js';
 import {deckSearchHTML} from '../src/deck-controls.js';
 function fixture(){
   const s=createSession();s.mode='play';s.assets=['a','b','c'].map(id=>({id,type:'card',name:`卡牌 ${id}`,width:160,height:240,front:'/assets/card-01-front.webp'}));
@@ -35,4 +35,40 @@ test('dropping a movable pile onto another pile appends its cards in order witho
   assert.equal(snapCardOnto(s,moving,deck),true);assert.deepEqual(deck.cards,['a','b','c','a']);
   assert.equal(s.objects.includes(moving),false);assert.equal(reference.drawTarget.deckKey,'source');
   assert.equal(s.objects.find(o=>o.id===deck.id),deck);assert.deepEqual(validateSession(s),s);
+});
+
+test('a bottom return preserves the current top and its face, with the returned card drawn last',()=>{
+  const {s,deck,card}=fixture(),before=structuredClone(deck);
+  assert.equal(snapCardOnto(s,card,deck,{position:'bottom'}),true);
+  assert.equal(s.objects.length,1);assert.equal(deck.id,before.id);
+  assert.deepEqual(deckEntries(deck),[{assetId:'c',faceUp:true},{assetId:'a',faceUp:false},{assetId:'b',faceUp:false}]);
+  for(const key of ['id','name','width','height','rotation','drawKey','drawTarget','ihRole','setupOrder','x','y'])assert.deepEqual(deck[key],before[key]);
+  const restored=JSON.parse(JSON.stringify(s));validateSession(restored);const pile=restored.objects[0];
+  assert.deepEqual([drawFromDeck(restored,pile).assetId,drawFromDeck(restored,pile).assetId,drawFromDeck(restored,pile).assetId],['b','a','c']);
+});
+
+test('empty, fixed and full piles enforce the same limits for bottom insertion',()=>{
+  const {s,deck,card}=fixture();deck.fixedPosition=true;deck.maxCards=3;
+  assert.equal(snapCardOnto(s,card,deck,{position:'bottom'}),true);assert.deepEqual(deck.cards,['c','a','b']);
+  const full=fixture();full.deck.maxCards=2;let before=structuredClone(full.s);assert.equal(snapCardOnto(full.s,full.card,full.deck,{position:'bottom'}),false);assert.deepEqual(full.s,before);
+  full.deck.maxCards=3;full.deck.locked=true;before=structuredClone(full.s);assert.equal(snapCardOnto(full.s,full.card,full.deck,{position:'bottom'}),false);assert.deepEqual(full.s,before);
+  const empty=fixture();replaceDeckEntries(empty.deck,[]);assert.equal(snapCardOnto(empty.s,empty.card,empty.deck,{position:'bottom'}),true);assert.deepEqual(deckEntries(empty.deck),[{assetId:'c',faceUp:true}]);
+});
+
+test('a whole pile can be inserted at the bottom while retaining its own mixed face order',()=>{
+  const {s,deck}=fixture();s.objects=[deck];const moving={...baseObject('deck',300,300,10),cards:['c','a'],faceUp:false,cardFaces:[true,false]};s.objects.push(moving);
+  assert.equal(snapCardOnto(s,moving,deck,{position:'bottom'}),true);
+  assert.deepEqual(deckEntries(deck),[{assetId:'c',faceUp:true},{assetId:'a',faceUp:false},{assetId:'a',faceUp:false},{assetId:'b',faceUp:false}]);validateSession(s);
+});
+
+test('bottom hover arms only after an uninterrupted hold and resets on leave, switch or cancellation',()=>{
+  const scheduled=[],canceled=[],ready=[];
+  const hover=createDeckBottomHover(id=>ready.push(id),{schedule:(fn,ms)=>{assert.equal(ms,DECK_BOTTOM_HOVER_MS);scheduled.push(fn);return scheduled.length;},cancel:id=>canceled.push(id)});
+  hover.update('a');assert.equal(hover.readyFor('a'),false);hover.update('a');assert.equal(scheduled.length,1);
+  scheduled[0]();scheduled[0]();assert.deepEqual(ready,['a']);assert.equal(hover.readyFor('a'),true);
+  hover.update('b');assert.equal(hover.readyFor('a'),false);assert.equal(hover.readyFor('b'),false);
+  hover.update(null);scheduled[1]();assert.equal(hover.readyFor('b'),false);
+  hover.update('a');const old=scheduled[2];hover.update(null);hover.update('a');old();assert.equal(hover.readyFor('a'),false);
+  scheduled[3]();assert.equal(hover.readyFor('a'),true);hover.cancel();assert.equal(hover.readyFor('a'),false);
+  hover.update('c');hover.cancel();scheduled[4]();assert.deepEqual(ready,['a','a']);assert.ok(canceled.length>=3);
 });

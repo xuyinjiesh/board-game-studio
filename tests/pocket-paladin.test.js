@@ -2,12 +2,74 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
 import {createProject,startOpening,openEditor,saveEditorDraft} from '../src/projects.js';
-import {validateSession,assetFor} from '../src/model.js';
+import {validateSession,assetFor,rotateHeldObject} from '../src/model.js';
 import {canRollPocketSource,rollPocketSource,adjustPocketToken,preparePocketSession,dropPocketMarker,pocketMarkerAnchors} from '../src/games/pocket-paladin.js';
 import {pocketPaladin} from '../src/games/pocket-paladin.js';
 import {POCKET_MAP_STEP,pocketHexes,pocketPawnPlacement,pocketMapDrop,upgradePocketMaps} from '../src/games/pocket-paladin-map.js';
-import {cardDropPlan,findCardSnapTarget} from '../src/interactions.js';
+import {cardDropPlan,findCardSnapTarget,snapCardOnto} from '../src/interactions.js';
 const allEnemies=s=>s.objects.flatMap(o=>o.type==='deck'?o.cards:o.type==='card'?[o.assetId]:[]).filter(id=>id.startsWith('pp-enemy-')).sort();
+test('all openings leave clear rows around the left ability panel and right status track without a mat',()=>{
+ const project=createProject('pocket-paladin');
+ for(const profile of project.setupProfiles){
+  const s=startOpening(project,profile.id),ability=s.objects.find(o=>o.assetId==='pp-ability'),track=s.objects.find(o=>o.assetId==='pp-tracks');
+  assert.equal(s.objects.some(o=>o.assetId==='pp-table'),false);assert.equal(s.assets.some(a=>a.id==='pp-table'),false);
+  assert.ok(ability.x<550&&track.x>950);
+  for(const [label,panel] of [['个人面板',ability],['个人状态滑轨',track]]){
+   const zone=pocketPaladin.zones.find(z=>z.label===label);
+   assert.ok(panel.y-132-(zone.box[1]+zone.box[3])>=18,'panel clears its entire title row');
+  }
+  const sourceZone=pocketPaladin.zones.find(z=>z.label==='水晶源');
+  for(const offer of s.objects.filter(o=>o.ppOffer))assert.ok(sourceZone.box[0]-(offer.x+34)>=70,'offer clears the right column title');
+  for(const key of ['blue','black','purple']){
+   const crystal=s.objects.find(o=>o.assetId==='pp-'+key),counter=s.objects.find(o=>o.kind==='pp-'+key);
+   assert.ok(crystal.y+36<counter.y-13);assert.ok(counter.y+13<track.y-132);
+  }
+ }
+});
+
+test('legacy layout migrates progress and openings once, carries track markers and preserves custom placements',()=>{
+ const s=createProject('pocket-paladin');delete s.pocketLayoutVersion;
+ s.assets.push({id:'pp-table',type:'board',name:'冒险桌垫',width:1540,height:1100,front:'/assets/pocket-paladin/table.webp'});
+ const tables=[s.objects,s.initialSetup.objects,...s.setupProfiles.map(p=>p.setup.objects)];
+ for(const objects of tables){
+  objects.push({type:'board',assetId:'pp-table',x:770,y:550});
+  for(const [id,x,y] of [['ability',1035,430],['tracks',235,360]]){
+   const panel=objects.find(o=>o.assetId==='pp-'+id),dx=x-panel.x,dy=y-panel.y;
+   for(const marker of objects.filter(o=>id==='ability'?o.kind==='pp-ability':['pp-round','pp-turn','pp-wounds','pp-level'].includes(o.kind))){marker.x+=dx;marker.y+=dy;}
+   Object.assign(panel,{x,y});
+  }
+ }
+ const marker=s.objects.find(o=>o.kind==='pp-turn'),offset=[marker.x-235,marker.y-360];
+ const custom=tables.at(-1).find(o=>o.assetId==='pp-ability');custom.x=1500;
+ const enemies=allEnemies(s);preparePocketSession(s);
+ assert.deepEqual([marker.x-1250,marker.y-550],offset);assert.equal(custom.x,1500);assert.deepEqual(allEnemies(s),enemies);
+ assert.ok(tables.every(objects=>!objects.some(o=>o.assetId==='pp-table')));
+ const migrated=structuredClone(s);preparePocketSession(s);assert.deepEqual(s,migrated);validateSession(s);
+});
+test('previous mat-free saves gain title clearance without resetting marker positions or crystal values',()=>{
+ const s=createProject('pocket-paladin');s.pocketLayoutVersion=2;
+ const tables=[s.objects,s.initialSetup.objects,...s.setupProfiles.map(p=>p.setup.objects)];
+ for(const objects of tables){
+  for(const id of ['tracks','blue','black','purple','source']){
+   const panel=objects.find(o=>o.assetId==='pp-'+id);panel.x-=80;if(id==='tracks')panel.y-=50;
+  }
+  for(const marker of objects.filter(o=>o.kind?.startsWith('pp-')&&o.kind!=='pp-ability')){
+   marker.x-=80;if(['pp-round','pp-turn','pp-wounds','pp-level'].includes(marker.kind))marker.y-=50;
+  }
+  objects.find(o=>o.kind==='pp-blue').value=4;
+ }
+ const marker=s.objects.find(o=>o.kind==='pp-wounds');marker.x+=9;marker.y-=7;
+ const previous=[marker.x,marker.y];const ability=structuredClone(s.objects.find(o=>o.assetId==='pp-ability'));
+ preparePocketSession(s);
+ assert.deepEqual([marker.x,marker.y],[previous[0]+80,previous[1]+50]);
+ assert.deepEqual(s.objects.find(o=>o.assetId==='pp-ability'),ability);
+ for(const objects of tables){
+  assert.equal(objects.find(o=>o.kind==='pp-blue').value,4);
+  assert.equal(objects.find(o=>o.assetId==='pp-tracks').y,550);
+ }
+ const migrated=structuredClone(s);preparePocketSession(s);assert.deepEqual(s,migrated);validateSession(s);
+});
+
 test('all four openings conserve 16 unique double-sided tokens and deal three wandering enemies and three offers',()=>{
  const project=createProject('pocket-paladin');assert.equal(project.setupProfiles.length,4);
  for(const p of project.setupProfiles){
@@ -21,6 +83,13 @@ test('all four openings conserve 16 unique double-sided tokens and deal three wa
  }
  for(const a of project.assets){assert.ok(existsSync('public'+a.front));if(a.back)assert.ok(existsSync('public'+a.back));}
 });
+
+test('a Pocket Paladin enemy chit returns to its enemy pile bottom without changing the next enemy',()=>{
+ const s=startOpening(createProject('pocket-paladin')),enemy=s.objects.find(o=>o.ppOffer===false),type=assetFor(s,enemy.assetId).enemyType;
+ const pile=s.objects.find(o=>o.ppPool===type),oldTop=pile.cards.at(-1),all=allEnemies(s);
+ assert.equal(snapCardOnto(s,enemy,pile,{position:'bottom'}),true);
+ assert.equal(pile.cards[0],enemy.assetId);assert.equal(pile.cards.at(-1),oldTop);assert.deepEqual(allEnemies(s),all);validateSession(s);
+});
 test('source rolls to all six directions without automating any game action',()=>{
  const s=startOpening(createProject('pocket-paladin')),source=s.objects.find(o=>o.assetId==='pp-source');
  assert.equal(pocketPaladin.toolbar,undefined);assert.equal(pocketPaladin.act,undefined);
@@ -32,6 +101,43 @@ test('source rolls to all six directions without automating any game action',()=
  source.locked=true;const before=structuredClone(s);assert.equal(rollPocketSource(s,source),false);assert.deepEqual(s,before);
  validateSession(JSON.parse(JSON.stringify(s)));
  const editor=saveEditorDraft(openEditor(s));rollPocketSource(editor,editor.objects.find(o=>o.assetId==='pp-source'),()=>.2);validateSession(editor);
+});
+
+test('held crystal rotation follows 60-degree edges and keeps the resource count in sync',()=>{
+ const s=startOpening(createProject('pocket-paladin'));
+ for(const key of ['blue','black','purple']){
+  const shard=s.objects.find(o=>o.assetId==='pp-'+key),counter=s.objects.find(o=>o.kind==='pp-'+key),position=[shard.x,shard.y];
+  assert.equal(pocketPaladin.rotationStep(s,shard),60);
+  for(let i=1;i<=6;i++){
+   rotateHeldObject(shard,1,pocketPaladin.rotationStep(s,shard));pocketPaladin.onRotate(s,shard);
+   assert.equal(shard.rotation,(i*60)%360);assert.equal(counter.value,(6-i)%6);
+  }
+  rotateHeldObject(shard,-1,60);pocketPaladin.onRotate(s,shard);assert.equal(counter.value,1);assert.deepEqual([shard.x,shard.y],position);
+ }
+ assert.equal(pocketPaladin.rotationStep(s,s.objects.find(o=>o.assetId==='pp-source')),60);
+ assert.equal(pocketPaladin.rotationStep(s,s.objects.find(o=>o.assetId==='pp-map-A')),90);
+ validateSession(JSON.parse(JSON.stringify(s)));
+});
+
+test('legacy tilted crystals follow stored counts while source and direct rotations align to 60 degrees',()=>{
+ const s=createProject('pocket-paladin'),tables=[s.objects,s.initialSetup.objects,...s.setupProfiles.map(p=>p.setup.objects)];
+ for(const objects of tables){
+  for(const [i,key]of ['blue','black','purple'].entries()){
+   const shard=objects.find(o=>o.assetId==='pp-'+key);shard.rotation=45+i*37;
+   objects.find(o=>o.kind==='pp-'+key).value=i;shard.x+=11;
+  }
+  objects.find(o=>o.assetId==='pp-source').rotation=91;
+ }
+ preparePocketSession(s);
+ for(const objects of tables){
+  for(const [i,key]of ['blue','black','purple'].entries())assert.equal(objects.find(o=>o.assetId==='pp-'+key).rotation,-60*i);
+  assert.equal(objects.find(o=>o.assetId==='pp-source').rotation,120);
+ }
+ const shard=s.objects.find(o=>o.assetId==='pp-black');shard.rotation=90;pocketPaladin.onRotate(s,shard);
+ assert.equal(shard.rotation,120);assert.equal(s.objects.find(o=>o.kind==='pp-black').value,4);
+ const snapshot=structuredClone(s);preparePocketSession(s);preparePocketSession(s);
+ assert.equal(s.objects.find(o=>o.assetId==='pp-black').rotation,-240);assert.deepEqual(s.objects.map(o=>[o.x,o.y]),snapshot.objects.map(o=>[o.x,o.y]));
+ validateSession(s);
 });
 
 test('tracking bounds, crystal orientation and authored openings survive save/restart',()=>{

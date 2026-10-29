@@ -4,6 +4,20 @@ import {createProject,openEditor,updateSetupProfile,saveEditorDraft,startOpening
 import {validateSession} from '../src/model.js';
 import {openingChoicesHTML} from '../src/opening-editor.js';
 
+test('Pocket Paladin opening icons follow the red and purple faces in both play and editing',()=>{
+  const s=migrateSession(JSON.parse(JSON.stringify(createProject('pocket-paladin'))));
+  for(const profile of s.setupProfiles){
+    const state={...s,setupProfiles:[profile]},color=profile.id.includes('purple')?'purple':'red';
+    for(const editing of [false,true]){
+      const html=openingChoicesHTML(state,{editing});
+      assert.match(html,new RegExp(`/assets/pocket-paladin/hero-${color}\\.webp`));
+      assert.doesNotMatch(html,new RegExp(`/assets/pocket-paladin/hero-${color==='red'?'purple':'red'}\\.webp`));
+    }
+    delete profile.coverAssetId;
+    assert.match(openingChoicesHTML(state),new RegExp(`/assets/pocket-paladin/hero-${color}\\.webp`));
+  }
+});
+
 test('edited opening choices match play choices and persist through save, import and sharing',()=>{
   let s=openEditor(createProject('iron-helm'));
   s.objects.find(o=>o.kind==='ih-health').value=7;

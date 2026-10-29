@@ -142,3 +142,20 @@ dialog:has(.deck-search-list){width:640px}
 .scene[data-game="pocket-paladin"] .card:is(:hover,.selected):not(.dragging) .card-lift{transform:none}
 
 .scene[data-game="pocket-paladin"] .card:has(img[src$="/blue.webp"],img[src$="/black.webp"],img[src$="/purple.webp"],img[src$="/source.webp"]) :is(.card-side,.card-shadow){clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)}
+
+#card-snap-preview.bottom-drop{border-color:#a8e2ca;background:#76d1ae22;box-shadow:0 0 0 5px #76d1ae33,0 0 26px #76d1ae66}
+#card-snap-preview.bottom-drop>span{border-color:#a8e2ca;color:#d3fff0}
+
+/* Hexagonal crystal shards stay flat while picked up or rotated. */
+#app[data-mode] .scene[data-game="pocket-paladin"] .pp-zone{display:block;border:0;border-top:1px solid #d3c29b38;text-align:left;padding-top:14px;color:#ded4b6a6}
+.scene[data-game="pocket-paladin"] .pp-zone>span{font-size:18px;letter-spacing:2px}
+.scene[data-game="pocket-paladin"] .pp-zone>small{font-size:13px;letter-spacing:1px;opacity:.7}
+#app[data-mode] .scene[data-game="pocket-paladin"] .pp-panel-label{padding-top:0;border:0;line-height:24px}
+.scene[data-game="pocket-paladin"] .card[data-asset-group="shard"] .card-lift{transform:none}
+/* These single-face cutouts have no card stock, white backing or 3D flip. */
+.scene[data-game="pocket-paladin"] .card[data-asset-group="shard"]{perspective:none}
+.scene[data-game="pocket-paladin"] .card[data-asset-group="shard"] :is(.card-lift,.card-flipper){transform:none;transform-style:flat}
+.scene[data-game="pocket-paladin"] .card[data-asset-group="shard"] .card-shadow,
+.scene[data-game="pocket-paladin"] .card[data-asset-group="shard"] .card-back,
+.scene[data-game="pocket-paladin"] .card[data-asset-group="shard"] .card-side:after{display:none}
+.scene[data-game="pocket-paladin"] .card[data-asset-group="shard"] .card-side{border:0;border-radius:0;background:transparent;box-shadow:none;clip-path:none;backface-visibility:visible;-webkit-backface-visibility:visible}

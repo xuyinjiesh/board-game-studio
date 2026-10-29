@@ -50,25 +50,53 @@ export function adjustPocketToken(s,o,delta){
 }
 export function preparePocketSession(s){
   upgradePocketMaps(s);
+  upgradePocketLayout(s);
   // A dragged track marker records its position, not a separate counter value.
   // Remove stale values from progress and every authored opening alike.
   const tables=[s.objects,s.initialSetup?.objects,s.setup?.objects,...(s.setupProfiles||[]).map(p=>p.setup.objects)];
   for(const objects of tables)for(const o of objects||[]){
     if(o.type==='token'&&o.kind?.startsWith('pp-')&&positionMarkers.has(o.kind.slice(3)))delete o.value;
+    if(o.type==='card'&&assetFor(s,o.assetId)?.group==='shard'){
+      const counter=(objects||[]).find(t=>t.kind==='pp-'+o.assetId.slice(3));
+      // Old R / angle controls could leave a hexagon at 90° or 15°. Use the
+      // explicit resource count when present; otherwise align its nearest edge.
+      o.rotation=Number.isInteger(counter?.value)&&counter.value>=0&&counter.value<=5?-60*counter.value:((Math.round(o.rotation/60)*60)%360+360)%360;
+    }
   }
+}
+// Only relocate the original printed layout. Custom placements and progress
+// stay where the player put them; track markers travel with their own panel.
+function upgradePocketLayout(s){
+  if(s.pocketLayoutVersion===3)return;
+  const placements=s.pocketLayoutVersion===2
+    ?[['tracks',1170,500,1250,550],['blue',1050,280,1130,280],['black',1170,280,1250,280],['purple',1290,280,1370,280],['source',1170,150,1250,150]]
+    :[['ability',1035,430,255,500],['tracks',235,360,1250,550],['blue',950,230,1130,280],['black',1035,230,1250,280],['purple',1120,230,1370,280],['source',1260,230,1250,150]];
+  const tables=new Set([s.objects,s.initialSetup?.objects,s.setup?.objects,...(s.setupProfiles||[]).map(p=>p.setup.objects)].filter(Boolean));
+  for(const objects of tables){
+    for(let i=objects.length-1;i>=0;i--)if(objects[i].assetId==='pp-table')objects.splice(i,1);
+    for(const [id,x,y,nx,ny] of placements){
+      const panel=objects.find(o=>o.type==='card'&&o.assetId==='pp-'+id&&Math.abs(o.x-x)<.1&&Math.abs(o.y-y)<.1);
+      if(!panel||panel.rotation&&['ability','tracks'].includes(id))continue;
+      for(const marker of objects.filter(o=>o.type==='token'&&(id==='ability'?o.kind==='pp-ability':id==='tracks'?['round','turn','wounds','level'].some(k=>o.kind==='pp-'+k):o.kind==='pp-'+id))){
+        if(Math.abs(marker.x-x)<=180&&Math.abs(marker.y-y)<=132){marker.x+=nx-x;marker.y+=ny-y;}
+      }
+      Object.assign(panel,{x:nx,y:ny});
+    }
+  }
+  s.assets=s.assets.filter(a=>a.id!=='pp-table');
+  s.pocketLayoutVersion=3;
 }
 export function createPocketPaladinSession(random=Math.random,hero='red',start='A'){
   const red=hero==='red',other=start==='A'?'B':'A';
   const s={...createSession('口袋骑士'),gameId:'pocket-paladin',mode:'play',assets:structuredClone(pocketPaladinAssets),meta:{players:'1 人',duration:'30–60 分钟',description:'沿能力路线穿越荒野，招募盟友，赶在黑暗降临前攻克城堡。',rules:'自由桌面：依照规则执行移动、战斗、升级与昼夜结算。默认简单难度：5 轮，城堡 2 名塔楼敌人和 1 名游荡敌人。红骑士开局须从展示区选取一个技能，再补满展示区。'}};
-  s.assets.push({id:'pp-table',type:'board',name:'冒险桌垫',width:1540,height:1100,front:'/assets/pocket-paladin/table.webp'});
-  s.objects.push({...baseObject('board',770,550,0),assetId:'pp-table',width:1540,height:1100,locked:true});
+  s.pocketLayoutVersion=3;
   const bottom={...card('map-'+start,698,675,2),snapCards:false},top={...card('map-'+other,698,675-POCKET_MAP_STEP,1),snapCards:false};
-  s.objects.push(bottom,top,card('tracks',235,360,4,red),card('ability',1035,430,4,red));
+  s.objects.push(bottom,top,card('ability',255,500,4,red),card('tracks',1250,550,4,red));
   const startHex=pocketHexes(s,bottom).find(p=>p.row===5&&p.col===1);
   s.objects.push(card('hero',startHex.x,startHex.y,20,red));
   s.pocketMapVersion=2;
-  for(const [i,c] of ['blue','black','purple'].entries())s.objects.push(card(c,950+i*85,230,5));
-  s.objects.push({...card('source',1260,230,5),rotation:Math.floor(random()*6)*60});
+  for(const [i,c] of ['blue','black','purple'].entries())s.objects.push(card(c,1130+i*120,280,5));
+  s.objects.push({...card('source',1250,150,5),rotation:Math.floor(random()*6)*60});
   const sources={};
   for(const [i,type] of ['monster','mage'].entries()){
     const source={...baseObject('deck',540+i*90,100,4),name:type==='monster'?'怪物牌堆':'法师牌堆',cards:s.assets.filter(a=>a.enemyType===type).map(a=>a.id),faceUp:true,width:68,height:68,setupKey:'pp-'+type,setupOrder:'shuffle',maxCards:16,fixedPosition:true,snapCards:true,ppPool:type,drawTarget:{mode:'below',gap:28}};
@@ -90,7 +118,7 @@ export function createPocketPaladinSession(random=Math.random,hero='red',start='
   for(const [i,key] of Object.keys(labels).entries()){
     const value=['round','turn','level','ability'].includes(key)?1:0;
     const o={...baseObject('token',920+i*60,600,30),kind:'pp-'+key,name:labels[key],color:key==='wounds'?'#9c393a':'#b99a5d',value,width:26,height:26,faceUp:true};
-    if(['blue','black','purple'].includes(key)){o.x=950+['blue','black','purple'].indexOf(key)*85;o.y=285;}
+    if(['blue','black','purple'].includes(key)){o.x=1130+['blue','black','purple'].indexOf(key)*120;o.y=335;}
     s.objects.push(o);locate(s,o);if(positionMarkers.has(key))delete o.value;
   }
   s.initialSetup=captureSetup(s);s.initialSetup.objects.push(...deals.map(({id,...o})=>o));
@@ -109,7 +137,27 @@ export function pocketJournal(){
 export const pocketPaladin={
   id:'pocket-paladin',title:'口袋骑士',subtitle:'POCKET PALADIN',players:'1 人',duration:'30–60 分钟',create:createPocketPaladinSession,
   openingProfiles:()=>['red','purple'].flatMap(hero=>['A','B'].map(start=>({id:`pp-${hero}-${start}`,name:`${hero==='red'?'红':'紫'}骑士 · 地图 ${start} 出发`,coverAssetId:'pp-hero',description:hero==='red'?'开局从展示区选择一个技能。':'开局具有一个盟友容量。',setup:createPocketPaladinSession(()=>.5,hero,start).initialSetup}))),
-  openingProfileId:()=> 'pp-red-A',zones:[],journal:pocketJournal,canRoll:canRollPocketSource,rollObject:rollPocketSource,
+  openingProfileId:()=> 'pp-red-A',tableBounds:{x:760,y:510,width:1420,height:940},
+  zones:[
+    {className:'pp-zone',label:'已使用的盟友',box:[75,55,360,120]},
+    {className:'pp-zone',label:'就绪盟友',box:[75,210,360,120]},
+    {className:'pp-zone pp-panel-label',label:'个人面板',box:[75,320,360,28]},
+    {className:'pp-zone',label:'已学技能',box:[75,680,360,120]},
+    {className:'pp-zone',label:'已使用的技能',box:[75,835,360,120]},
+    {className:'pp-zone pp-panel-label',label:'水晶源',box:[1070,60,360,28]},
+    {className:'pp-zone pp-panel-label',label:'水晶指示物',box:[1070,215,360,28]},
+    {className:'pp-zone pp-panel-label',label:'个人状态滑轨',box:[1070,365,360,28]},
+    {className:'pp-zone pp-experience',label:'获得的经验',subtitle:'敌人倒置放置于此',box:[1070,730,360,225]},
+  ],journal:pocketJournal,canRoll:canRollPocketSource,rollObject:rollPocketSource,
+  rotationStep:(s,o)=>assetFor(s,o.assetId)?.group==='shard'?60:90,
+  onRotate(s,o){
+    if(o.type!=='card'||assetFor(s,o.assetId)?.group!=='shard')return;
+    o.rotation=((Math.round(o.rotation/60)*60)%360+360)%360;
+    const key=o.assetId?.slice(3);
+    if(!['blue','black','purple'].includes(key))return;
+    const counter=s.objects.find(t=>t.kind==='pp-'+key);
+    if(counter)counter.value=((6-Math.round(o.rotation/60))%6+6)%6;
+  },
   prepareSession:preparePocketSession,cardPlacement:pocketPawnPlacement,onDrop:pocketMapDrop,onTokenDrop:dropPocketMarker,snapLabel:'卡面格点吸附',
   tokens:Object.entries(labels).map(([key,name])=>({kind:'pp-'+key,name,color:key==='wounds'?'#9c393a':'#b99a5d',...(!positionMarkers.has(key)?{value:limits[key][0]}:{}),width:26,height:26,description:positionMarkers.has(key)?'空白指示物 · 拖近对应轨道或能力格时吸附到格子中心，用位置记录状态。':'滚轮增减水晶数值，并同步水晶转盘。'})),
   tokenIcon:(kind,o)=>`<span title="${labels[kind.slice(3)]||''}" style="font-size:13px;font-weight:bold;color:#fff">${positionMarkers.has(kind.slice(3))?'':o?.value??''}</span>`,adjustToken:adjustPocketToken,

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {wheelIntent,isPanGesture,findCardSnapTarget,snapCardOnto,startDeckPress,DECK_HOLD_MS} from '../src/interactions.js';
-import {drawFromDeck,adjustTokenValue} from '../src/model.js';
+import {drawFromDeck,adjustTokenValue,adjustDieValue,rotateHeldObject} from '../src/model.js';
 import {createIronHelmSession,ironHelm,value} from '../src/games/iron-helm.js';
 import {scheduleDeckDraw,DECK_CLICK_MS} from '../src/interactions.js';
 import {startDeckMenuPress} from '../src/interactions.js';
@@ -48,7 +48,10 @@ test('fixed piles never arm a whole-pile hold and can only drag a top card',()=>
 
 test('wheel gestures separate idle scrolling, counter adjustment, and Ctrl zoom',()=>{
   const token={type:'token',value:3},scroll={deltaY:-100,deltaMode:0,ctrlKey:false};
-  for(const object of [undefined,{type:'card'},{type:'die',value:3},{type:'token'}, {...token,locked:true}])assert.deepEqual(wheelIntent(scroll,object),{kind:'none'});
+  for(const object of [undefined,{...token,locked:true}])assert.deepEqual(wheelIntent(scroll,object),{kind:'none'});
+  assert.deepEqual(wheelIntent(scroll,{type:'card'}),{kind:'rotate',delta:1});
+  assert.deepEqual(wheelIntent(scroll,{type:'die',value:3}),{kind:'die-step',delta:1});
+  assert.deepEqual(wheelIntent(scroll,{type:'token'}),{kind:'rotate',delta:1});
   assert.deepEqual(wheelIntent(scroll,token),{kind:'counter',delta:1});
   assert.deepEqual(wheelIntent({...scroll,deltaY:100},token),{kind:'counter',delta:-1});
   assert.deepEqual(wheelIntent({...scroll,deltaY:0},token),{kind:'none'});
@@ -57,6 +60,52 @@ test('wheel gestures separate idle scrolling, counter adjustment, and Ctrl zoom'
   assert.ok(wheelIntent({...scroll,ctrlKey:true,deltaY:100}).factor<1);
   assert.deepEqual(wheelIntent(scroll,token,{handTool:true}),{kind:'none'});
   assert.deepEqual(wheelIntent({...scroll,ctrlKey:true},token,{dragging:true}),{kind:'none'});
+});
+
+test('holding a die or numeric marker allows wheel adjustment during its pointer gesture',()=>{
+  const up={deltaY:-120,deltaMode:0,ctrlKey:false},down={...up,deltaY:120},die={type:'die',value:3,faces:[1,2,3,4,5,6]},token={type:'token',value:0};
+  const held={dragging:true,holding:true};
+  assert.deepEqual(wheelIntent(up,die,held),{kind:'die-step',delta:1});
+  assert.deepEqual(wheelIntent(down,die,held),{kind:'die-step',delta:-1});
+  assert.deepEqual(wheelIntent(up,token,held),{kind:'counter',delta:1});
+  assert.deepEqual(wheelIntent(down,token,held),{kind:'counter',delta:-1});
+  for(const object of [die,token]){
+    assert.deepEqual(wheelIntent(up,{...object,locked:true},held),{kind:'none'});
+    assert.deepEqual(wheelIntent(up,object,{...held,handTool:true}),{kind:'none'});
+    assert.deepEqual(wheelIntent({...up,ctrlKey:true},object,held),{kind:'none'});
+  }
+  assert.deepEqual(wheelIntent(up,{type:'token',kind:'pp-turn'},held),{kind:'rotate',delta:1});
+});
+
+test('held wheel rotates nonnumeric components and leaves numeric and zoom gestures distinct',()=>{
+  const up={deltaY:-120,ctrlKey:false},held={holding:true,dragging:true};
+  for(const type of ['card','token','board','deal','deck']){
+    const o={type,rotation:0};
+    assert.deepEqual(wheelIntent(up,o,held),{kind:'rotate',delta:1});
+    assert.deepEqual(wheelIntent({...up,deltaY:120},o,held),{kind:'rotate',delta:-1});
+    assert.deepEqual(wheelIntent(up,o),{kind:'rotate',delta:1});
+    assert.deepEqual(wheelIntent(up,{...o,locked:true},held),{kind:'none'});
+    assert.deepEqual(wheelIntent(up,o,{...held,handTool:true}),{kind:'none'});
+    assert.deepEqual(wheelIntent({...up,ctrlKey:true},o,held),{kind:'none'});
+  }
+  const card={type:'card',rotation:.7,x:120,y:330};
+  assert.equal(rotateHeldObject(card,1),true);assert.equal(card.rotation,90);
+  rotateHeldObject(card,-1);assert.equal(card.rotation,0);rotateHeldObject(card,-1);assert.equal(card.rotation,270);
+  assert.deepEqual([card.x,card.y],[120,330]);
+  card.locked=true;assert.equal(rotateHeldObject(card,1),false);assert.equal(card.rotation,270);
+  assert.equal(rotateHeldObject({type:'die',rotation:0},1),false);
+  assert.equal(rotateHeldObject({type:'card',rotation:0},1,0),false);
+});
+
+test('wheel stepping clamps dice at valid faces, including nonconsecutive and unordered values',()=>{
+  const die={type:'die',faces:[6,2,10,3,5,4],value:6};
+  assert.equal(adjustDieValue(die,1),true);assert.equal(die.value,10);
+  assert.equal(adjustDieValue(die,1),false);assert.equal(die.value,10);
+  assert.equal(adjustDieValue(die,-1),true);assert.equal(die.value,6);
+  die.value=2;assert.equal(adjustDieValue(die,-1),false);assert.equal(die.value,2);
+  die.locked=true;assert.equal(adjustDieValue(die,1),false);
+  assert.equal(adjustDieValue({type:'die',faces:[1,2,3,4,5,6],value:7},1),false);
+  assert.equal(adjustDieValue({type:'token',value:3},1),false);
 });
 test('hand tool takes priority on both objects and empty canvas',()=>{
   assert.equal(isPanGesture(0,false),false);

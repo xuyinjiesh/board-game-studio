@@ -3,10 +3,17 @@ import {canResize} from './sizing.js';
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function openingChoicesHTML(state,{editing=false}={}){
   const profiles=state.setupProfiles||[];
-  const previews=profiles.map(p=>{const hero=p.setup.objects.find(o=>o.ihRole==='hero'&&(o.type==='card'||o.cards?.length));return assetFor(state,p.coverAssetId??(hero?.assetId||hero?.cards?.at(-1)));});
+  const previews=profiles.map(p=>{
+    const hero=p.setup.objects.find(o=>o.ihRole==='hero'&&(o.type==='card'||o.cards?.length))
+      ||p.setup.objects.find(o=>o.type==='card'&&assetFor(state,o.assetId)?.group==='hero');
+    const id=p.coverAssetId??(hero?.assetId||hero?.cards?.at(-1)),asset=assetFor(state,id);
+    if(!asset)return null;
+    const piece=p.setup.objects.find(o=>o.type==='card'&&o.assetId===id);
+    return {asset,src:piece?.faceUp===false&&asset.back?asset.back:asset.front};
+  });
   return `<div class="profile-list${previews.some(Boolean)?' profile-cards':''}">${profiles.map((p,i)=>{
     const hero=previews[i];
-    return `<button ${editing?'data-edit-profile':'data-start-profile'}="${escape(p.id)}" class="${editing&&p.id===state.activeSetupProfileId?'active':''}">${hero?`<img src="${escape(hero.front)}" alt="${escape(hero.name)}" draggable="false">`:''}<strong>${escape(p.name)}</strong>${p.description?`<small class="profile-description">${escape(p.description)}</small>`:''}<small>${editing?'编辑此方案的桌面 ↗':'以此方案开始新一局 ↗'}</small></button>`;
+    return `<button ${editing?'data-edit-profile':'data-start-profile'}="${escape(p.id)}" class="${editing&&p.id===state.activeSetupProfileId?'active':''}">${hero?`<img src="${escape(hero.src)}" alt="${escape(hero.asset.name)}" draggable="false">`:''}<strong>${escape(p.name)}</strong>${p.description?`<small class="profile-description">${escape(p.description)}</small>`:''}<small>${editing?'编辑此方案的桌面 ↗':'以此方案开始新一局 ↗'}</small></button>`;
   }).join('')}</div>`;
 }
 export function drawTargetHTML(state,o){

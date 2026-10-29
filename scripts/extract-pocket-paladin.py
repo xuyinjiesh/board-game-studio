@@ -20,7 +20,9 @@ def crop(page, box, name, rotate=0, circle=False, hexagon=False):
     if circle:
         im=im.convert('RGBA');mask=Image.new('L',im.size);ImageDraw.Draw(mask).ellipse((0,0,im.width-1,im.height-1),fill=255);im.putalpha(mask)
     if hexagon:
-        im=im.convert('RGBA');w,h=im.size;mask=Image.new('L',im.size);ImageDraw.Draw(mask).polygon([(w/4,0),(w*3/4,0),(w-1,h/2),(w*3/4,h-1),(w/4,h-1),(0,h/2)],fill=255);im.putalpha(mask)
+        # Stay one render pixel inside the printed cut line, excluding the
+        # surrounding white PDF paper and its antialiased edge.
+        im=im.convert('RGBA');w,h=im.size;mask=Image.new('L',im.size);ImageDraw.Draw(mask).polygon([(w/4,1),(w*3/4,1),(w-2,h/2),(w*3/4,h-2),(w/4,h-2),(1,h/2)],fill=255);im.putalpha(mask)
     im.save(out/f'{name}.webp',quality=93)
     return f'/assets/pocket-paladin/{name}.webp'
 def add(code,name,group,w,h,front,back=None,**kw):
@@ -35,7 +37,7 @@ for i in range(16):
 add('hero','红／紫骑士','hero',48,48,crop(1,(464,133,539,208),'hero-red',circle=True),crop(2,(464,133,539,208),'hero-purple',circle=True))
 for code,name,box in [('ability','能力路线',(314,233,513,504)),('tracks','状态轨道',(552,233,752,504))]:
     add(code,name,'track',360,264,crop(1,box,code+'-red',rotate=270),crop(2,box,code+'-purple',rotate=270))
-for i,(code,name,box) in enumerate([('blue','蓝水晶',(17,219,107,298)),('black','黑水晶',(117,219,207,298)),('source','水晶源',(17,309,107,388)),('purple','紫水晶',(117,309,207,388))]):
+for i,(code,name,box) in enumerate([('blue','蓝水晶',(17,219.67,107.33,297.67)),('black','黑水晶',(107.33,219.67,197.67,297.67)),('source','水晶源',(17,309.67,107.33,387.67)),('purple','紫水晶',(107.33,309.67,197.67,387.67))]):
     add(code,name,'shard',70,61,crop(1,box,code,hexagon=True))
 for i,(x,label) in enumerate([(117,'A'),(390,'B')]):
     box=(x,86,x+273,454)
