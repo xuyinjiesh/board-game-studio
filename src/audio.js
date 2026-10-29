@@ -1,3 +1,4 @@
+import {assetUrl} from './asset-url.js';
 // Kenney CC0 recordings; provenance and original licenses live in /assets/audio/.
 const casino=(...names)=>names.map(name=>`/assets/audio/casino/${name}.ogg`);
 const impact=(...names)=>names.map(name=>`/assets/audio/impact/${name}.ogg`);
@@ -43,7 +44,7 @@ function audioContext(){
 }
 function load(url){
   if(!buffers.has(url)){
-    const pending=fetch(url).then(response=>{
+    const pending=fetch(assetUrl(url)).then(response=>{
       if(!response.ok)throw new Error('Audio unavailable');
       return response.arrayBuffer();
     }).then(data=>context.decodeAudioData(data)).then(buffer=>{

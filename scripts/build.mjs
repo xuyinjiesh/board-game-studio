@@ -18,7 +18,7 @@ async function rewrite(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const file = join(directory, entry.name);
     if (entry.isDirectory()) await rewrite(file);
-    else if (/\.(html|js|css)$/.test(entry.name)) {
+    else if (/\.(html|css)$/.test(entry.name)) {
       const source = await readFile(file, 'utf8');
       const result = source
         .replace(/(["'`(=])\/(assets|src)\//g, (_, quote, folder) => `${quote}${input}${folder}/`)

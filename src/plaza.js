@@ -1,3 +1,4 @@
+import {assetUrl} from './asset-url.js';
 import {examples,createProject,copyProject,openEditor,startOpening} from './projects.js';
 import {projectStore} from './project-store.js';
 import {findLibraryDraft,libraryName} from './library.js';
@@ -15,7 +16,7 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
   }
   function card(session,type,id){
     const cards=session.assets.filter(a=>a.type==='card').slice(0,3),image=session.assets.find(a=>a.type==='board'||a.type==='token');
-    const art=cards.length?cards.map(a=>'<img src="'+escape(a.front)+'" alt="" loading="lazy">').join(''):image?'<img class="single-cover" src="'+escape(image.front)+'" alt="" loading="lazy">':'<span>◇</span>';
+    const art=cards.length?cards.map(a=>'<img src="'+escape(assetUrl(a.front))+'" alt="" loading="lazy">').join(''):image?'<img class="single-cover" src="'+escape(assetUrl(image.front))+'" alt="" loading="lazy">':'<span>◇</span>';
     const attrs='="'+escape(id)+'"';
     const buttons=type==='project'?'<button data-plaza-project'+attrs+'>编辑草稿 <span>↗</span></button>'+(session.mode==='play'?'<button class="secondary" data-resume-project'+attrs+'>继续游玩</button>':''):'<button data-plaza-'+type+attrs+'>开始游玩 <span>↗</span></button><button class="secondary" data-edit-'+type+attrs+'>编辑游戏</button>';
     return '<article class="plaza-card"><div class="plaza-art">'+art+'</div><div class="plaza-card-body"><h2>'+escape(session.name)+'</h2><p>'+escape(session.meta?.description||'自由摆放，随时开始。')+'</p><div class="plaza-card-meta">'+escape([session.meta?.players,session.meta?.duration].filter(Boolean).join(' · '))+'</div><div class="plaza-card-actions">'+buttons+'</div>'+(type==='exhibit'?'<button class="unlist-exhibit" data-unlist'+attrs+'>撤销发布</button>':type==='project'?'<button class="delete-draft" data-delete-draft'+attrs+'>删除草稿</button>':'')+'</div></article>';

@@ -20,7 +20,8 @@ test('static builds support root and project Pages paths and remove stale output
       const build = spawnSync(process.execPath, [script], { cwd, env: { ...process.env, BASE_PATH: base }, encoding: 'utf8' });
       assert.equal(build.status, 0, build.stderr);
       assert.equal(await readFile(join(cwd, 'dist/index.html'), 'utf8'), `<a href="${base}"><script src="${base}src/app.js"></script>`);
-      assert.equal(await readFile(join(cwd, 'dist/src/app.js'), 'utf8'), `const a="${base}assets/card.webp"; const b=\`${base}assets/hero-\${id}.webp\`;`);
+      // Saved asset paths remain portable; the renderer resolves them at runtime.
+      assert.equal(await readFile(join(cwd, 'dist/src/app.js'), 'utf8'), 'const a="/assets/card.webp"; const b=`/assets/hero-${id}.webp`;');
       assert.equal(await readFile(join(cwd, 'dist/src/style.css'), 'utf8'), `a{background:url(${base}assets/card.webp)}`);
       await access(join(cwd, 'dist/.nojekyll'));
       await access(join(cwd, 'dist/assets/card.webp'));
