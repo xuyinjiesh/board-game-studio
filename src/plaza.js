@@ -5,6 +5,11 @@ import {findLibraryDraft,libraryName} from './library.js';
 import {uid} from './model.js';
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const $=s=>document.querySelector(s);
+const icon=paths=>'<svg class="plaza-icon" viewBox="0 0 24 24" aria-hidden="true">'+paths+'</svg>';
+const arrowIcon=icon('<path d="M5 12h14m-5-5 5 5-5 5"/>');
+const playersIcon=icon('<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M18 15a5 5 0 0 1 3 5"/>');
+const clockIcon=icon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>');
+const editIcon=icon('<path d="m14 5 5 5M4 20l5-1L20 8a3.5 3.5 0 0 0-5-5L4 14Z"/>');
 export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
   let filter='all',projects=[],exhibits=[],busy=false,pendingRemoval=null,lastRemoval=null;
   const notice=document.createElement('div');notice.className='library-notice';notice.hidden=true;notice.setAttribute('role','status');$('#plaza-grid').before(notice);
@@ -20,8 +25,12 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
     const cards=(covers.length?covers:available).slice(0,3),image=session.assets.find(a=>a.type==='board'||a.type==='token');
     const art=cards.length?cards.map(a=>'<img src="'+escape(assetUrl(a.front))+'" alt="" loading="lazy">').join(''):image?'<img class="single-cover" src="'+escape(assetUrl(image.front))+'" alt="" loading="lazy">':'<span>◇</span>';
     const attrs='="'+escape(id)+'"';
-    const buttons=type==='project'?'<button data-plaza-project'+attrs+'>编辑草稿 <span>↗</span></button>'+(session.mode==='play'?'<button class="secondary" data-resume-project'+attrs+'>继续游玩</button>':''):'<button data-plaza-'+type+attrs+'>开始游玩 <span>↗</span></button><button class="secondary" data-edit-'+type+attrs+'>编辑游戏</button>';
-    return '<article class="plaza-card"><div class="plaza-art">'+art+'</div><div class="plaza-card-body"><h2>'+escape(session.name)+'</h2><p>'+escape(session.meta?.description||'自由摆放，随时开始。')+'</p><div class="plaza-card-meta">'+escape([session.meta?.players,session.meta?.duration].filter(Boolean).join(' · '))+'</div><div class="plaza-card-actions">'+buttons+'</div>'+(type==='exhibit'?'<button class="unlist-exhibit" data-unlist'+attrs+'>撤销发布</button>':type==='project'?'<button class="delete-draft" data-delete-draft'+attrs+'>删除草稿</button>':'')+'</div></article>';
+    const buttons=type==='project'?'<button data-plaza-project'+attrs+'><span>编辑草稿</span>'+arrowIcon+'</button>'+(session.mode==='play'?'<button class="secondary" data-resume-project'+attrs+'>继续游玩</button>':''):'<button data-plaza-'+type+attrs+'><span>开始游玩</span>'+arrowIcon+'</button><button class="secondary" data-edit-'+type+attrs+'>'+editIcon+'编辑游戏</button>';
+    const exampleIndex=examples.findIndex(game=>game.id===session.gameId);
+    const tone=['sage','sand','slate','clay'][(exampleIndex<0?[...String(session.gameId||id)].reduce((sum,c)=>sum+c.charCodeAt(0),0):exampleIndex)%4];
+    const badge=type==='example'?'工坊精选':type==='project'?'本地草稿':'玩家作品';
+    const meta=(session.meta?.players?'<span>'+playersIcon+escape(session.meta.players)+'</span>':'')+(session.meta?.duration?'<span>'+clockIcon+escape(session.meta.duration)+'</span>':'');
+    return '<article class="plaza-card" data-cover-tone="'+tone+'"><div class="plaza-art"><span class="plaza-card-badge"><i></i>'+badge+'</span><div class="plaza-cover-stack">'+art+'</div></div><div class="plaza-card-body"><h3>'+escape(session.name)+'</h3><p>'+escape(session.meta?.description||'自由摆放，随时开始。')+'</p><div class="plaza-card-meta">'+meta+'</div><div class="plaza-card-actions">'+buttons+'</div>'+(type==='exhibit'?'<button class="unlist-exhibit" data-unlist'+attrs+'>撤销发布</button>':type==='project'?'<button class="delete-draft" data-delete-draft'+attrs+'>删除草稿</button>':'')+'</div></article>';
   }
   function renderCards(){
     const query=$('#plaza-search').value.trim().toLowerCase(),matches=s=>[s.name,s.meta?.description].join(' ').toLowerCase().includes(query),cards=[];
@@ -29,11 +38,14 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
       for(const game of examples){if(exhibits.some(e=>libraryName(e.session.name)===libraryName(game.title)))continue;const s=game.create(()=>.5);s.name=game.title;if(matches(s))cards.push(card(s,'example',game.id));}
       for(const entry of exhibits)if(matches(entry.session))cards.push(card(entry.session,'exhibit',entry.id));
     }else for(const entry of projects)if(matches(entry.session))cards.push(card(entry.session,'project',entry.id));
-    $('#plaza-grid').innerHTML=cards.join('')||'<div class="plaza-empty"><h2>'+ (query?'没有找到相关游戏':'还没有本地草稿')+'</h2><p>'+(query?'换个关键词试试。':'新建游戏，或从作品广场编辑游戏。')+'</p></div>';
+    $('#plaza-grid').innerHTML=cards.join('')||'<div class="plaza-empty"><span aria-hidden="true">'+icon('<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 8h.01M16 8h.01M12 12h.01M8 16h.01M16 16h.01"/>')+'</span><h3>'+ (query?'没有找到相关游戏':'灵感的第一步，从这里开始')+'</h3><p>'+(query?'换个关键词，发现另一种好玩。':'点击「新建游戏」，或从作品广场编辑一款喜欢的游戏。')+'</p></div>';
     document.querySelectorAll('[data-plaza-filter]').forEach(b=>{const active=b.dataset.plazaFilter===filter;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});
     $('#plaza-section-title').textContent=filter==='all'?'作品广场':'本地草稿';
     $('#plaza-section-note').textContent=filter==='all'?'选择一个游戏，开始游玩或编辑。':'直接摆放、设置开局，修改自动保存在这里。';
     $('#plaza-project-count').textContent=String(projects.length);
+    $('#plaza-result-count').textContent=cards.length+(query?' 个结果':filter==='all'?' 款游戏':' 份草稿');
+    $('#plaza-welcome-title').innerHTML=filter==='all'?'下一局，<em>玩点什么？</em>':'把灵感，<em>摆上桌面。</em>';
+    $('#plaza-welcome-note').innerHTML=filter==='all'?'从一场小小的冒险，到一个全新的灵感。<br>找一款喜欢的游戏，把时间留给好玩。':'每一个好游戏，都从一个小小的想法开始。<br>继续打磨你的作品，让下一局更有意思。';
   }
   async function openGame(source,originKey,edit,newExample=false){
     await flush();
