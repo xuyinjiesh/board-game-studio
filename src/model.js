@@ -192,6 +192,7 @@ export function validateSession(raw){
   if(raw.awaitingOpening!==undefined&&typeof raw.awaitingOpening!=='boolean')throw new Error('开局选择状态无效');
   if(raw.gameId!==undefined&&(typeof raw.gameId!=='string'||raw.gameId.length>100))throw new Error('游戏类型无效');
   if(raw.projectId!==undefined&&(typeof raw.projectId!=='string'||!raw.projectId||raw.projectId.length>100))throw new Error('项目编号无效');
+  if(raw.playOriginKey!==undefined&&(typeof raw.playOriginKey!=='string'||!raw.playOriginKey||raw.playOriginKey.length>200))throw new Error('游玩存档来源无效');
   if(raw.meta!==undefined){if(!raw.meta||typeof raw.meta!=='object')throw new Error('项目资料无效');for(const key of ['description','players','duration','rules'])if(raw.meta[key]!==undefined&&(typeof raw.meta[key]!=='string'||raw.meta[key].length>(key==='rules'?20000:1000)))throw new Error('项目资料过长或无效');}
   const result=structuredClone(raw);
   if(raw.setup!==undefined)result.setup=validateSetup(raw.setup,raw);

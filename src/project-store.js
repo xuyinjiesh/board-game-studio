@@ -2,11 +2,10 @@ import {draftNameConflict,exhibitNameConflict,nameMatches,uniqueLibraryEntries} 
 let database;
 function openDatabase(){
   return database??=new Promise((resolve,reject)=>{
-    const request=indexedDB.open('tablecraft.projects',1);
+    const request=indexedDB.open('tablecraft.projects',2);
     request.onupgradeneeded=()=>{
       const db=request.result;
-      db.createObjectStore('projects',{keyPath:'id'});
-      db.createObjectStore('exhibits',{keyPath:'id'});
+      for(const name of ['projects','exhibits','playSessions'])if(!db.objectStoreNames.contains(name))db.createObjectStore(name,{keyPath:'id'});
     };
     request.onsuccess=()=>resolve(request.result);
     request.onerror=()=>reject(new Error('无法打开本地项目库，请导出桌面备份'));
@@ -21,7 +20,14 @@ async function transaction(store,mode,operation){
   });
 }
 export const projectStore={
-  async save(session){return writeUnique('projects',session);},
+  async save(session){
+    if(session.playOriginKey){
+      if(session.awaitingOpening)return;
+      return transaction('playSessions','readwrite',store=>store.put({id:session.playOriginKey,updatedAt:session.updatedAt||Date.now(),session}));
+    }
+    return writeUnique('projects',session);
+  },
+  getPlay:originKey=>transaction('playSessions','readonly',store=>store.get(originKey)),
   get:id=>transaction('projects','readonly',store=>store.get(id)),
   async archive(id,archived){const entry=await this.get(id);if(!entry)throw new Error('项目未找到');entry.session.archived=archived;await this.save(entry.session);},
   async list(){return uniqueLibraryEntries(await transaction('projects','readonly',store=>store.getAll()));},

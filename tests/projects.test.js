@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createSession,captureSetup,validateSession,baseObject,applySetup} from '../src/model.js';
 import {createGroveSession,builtinAssets} from '../src/games/grove.js';
-import {createProject,copyProject,migrateSession,makeExhibit,gameFor,saveEditorDraft,openEditor} from '../src/projects.js';
+import {createProject,copyProject,migrateSession,makeExhibit,gameFor,saveEditorDraft,openEditor,createPlaySession,startOpening} from '../src/projects.js';
 
 test('saving the editor captures positions and individual opening policies directly',()=>{
   const s={...createProject('grove'),mode:'edit'},decks=s.objects.filter(o=>o.type==='deck');
@@ -90,4 +90,30 @@ test('invalid project rules, opening and asset references are rejected',()=>{
   for(const corrupt of [s=>s.meta.rules=3,s=>s.name='',s=>s.projectId={},s=>s.initialSetup.objects.push({...baseObject('card',0,0),assetId:'absent'})]){
     const s=createSession();corrupt(s);assert.throws(()=>validateSession(s));
   }
+});
+
+test('gallery play starts from the published opening with an independent progress identity',()=>{
+  const source=createProject('grove','果丛'),before=structuredClone(source);
+  source.objects[0].x=999;
+  const first=createPlaySession(source,'example:grove'),second=createPlaySession(source,'example:grove');
+  assert.equal(first.mode,'play');assert.equal(first.playOriginKey,'example:grove');
+  assert.notEqual(first.projectId,source.projectId);assert.notEqual(first.projectId,second.projectId);
+  const positions=session=>session.objects.map(o=>JSON.stringify([o.type,o.x,o.y])).sort();
+  assert.deepEqual(positions(first),positions(startOpening(before)));
+  assert.equal(source.objects[0].x,999);assert.equal(source.playOriginKey,undefined);
+  first.objects[0].x=111;assert.notEqual(second.objects[0].x,111);
+  assert.equal(migrateSession(JSON.parse(JSON.stringify(first))).playOriginKey,'example:grove');
+});
+
+test('opening choices and editing a played gallery game preserve separate progress and draft identities',()=>{
+  const source=createProject('iron-helm'),play=createPlaySession(source,'example:iron-helm');
+  assert.equal(play.awaitingOpening,true);assert.deepEqual(play.objects,[]);
+  const started=startOpening(play,play.setupProfiles[0].id,()=>.5);
+  assert.equal(started.awaitingOpening,undefined);assert.equal(started.playOriginKey,'example:iron-helm');
+  const editor=openEditor(started);
+  assert.equal(editor.mode,'edit');assert.equal(editor.playOriginKey,undefined);
+  assert.equal(editor.originKey,started.originKey);assert.notEqual(editor.projectId,started.projectId);
+  assert.equal(makeExhibit(started).session.playOriginKey,undefined);
+  assert.equal(started.playOriginKey,'example:iron-helm');
+  for(const invalid of ['',3,{},'x'.repeat(201)])assert.throws(()=>validateSession({...started,playOriginKey:invalid}));
 });

@@ -71,6 +71,7 @@ export function saveEditorDraft(session){
 
 export function openEditor(session){
   const draft=migrateSession(session);
+  if(draft.playOriginKey){draft.projectId=uid();delete draft.playOriginKey;}
   if(draft.mode==='play')draft.objects=editorObjects(draft.setupProfiles?.find(p=>p.id===draft.activeSetupProfileId)?.setup||draft.setup||draft.initialSetup);
   draft.mode='edit';
   delete draft.awaitingOpening;
@@ -128,12 +129,18 @@ export function startOpening(session,profileId=session.activeSetupProfileId,rand
   return opening;
 }
 
+export function createPlaySession(source,originKey){
+  const session={...migrateSession(source),projectId:uid(),originKey,playOriginKey:originKey};
+  return session.setupProfiles?.length>1?{...session,mode:'play',objects:[],awaitingOpening:true}:startOpening(session);
+}
+
 export function makeExhibit(session){
   const valid=validateSession(session);
   if(!valid.setup&&!valid.initialSetup?.objects.length)throw new Error('请先在初始设置中保存一个开局，再展示作品');
   const snapshot=structuredClone(valid);
   delete snapshot.setupDraft;
   delete snapshot.awaitingOpening;
+  delete snapshot.playOriginKey;
   const setup=snapshot.setup||snapshot.initialSetup;
   // Exhibitions represent the authored opening, never a half-played game.
   snapshot.objects=setup.objects.map(o=>({...structuredClone(o),id:uid()}));

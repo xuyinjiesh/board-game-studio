@@ -1,5 +1,5 @@
 import {assetUrl} from './asset-url.js';
-import {examples,gameFor,createProject,copyProject,openEditor,startOpening} from './projects.js';
+import {examples,gameFor,createProject,copyProject,openEditor,createPlaySession} from './projects.js';
 import {projectStore} from './project-store.js';
 import {findLibraryDraft,libraryName} from './library.js';
 import {uid} from './model.js';
@@ -12,7 +12,7 @@ const playersIcon=icon('<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1
 const clockIcon=icon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>');
 const editIcon=icon('<path d="m14 5 5 5M4 20l5-1L20 8a3.5 3.5 0 0 0-5-5L4 14Z"/>');
 export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
-  let filter='all',projects=[],exhibits=[],busy=false,pendingRemoval=null,lastRemoval=null;
+  let filter='all',projects=[],exhibits=[],busy=false,pendingRemoval=null,lastRemoval=null,pendingPlay=null;
   const notice=document.createElement('div');notice.className='library-notice';notice.hidden=true;notice.setAttribute('role','status');$('#plaza-grid').before(notice);
   $('#plaza-rating-sources').innerHTML=Object.values(gameCatalog).map(entry=>'<li><strong>'+escape(entry.name)+'</strong><span>'+entry.ratings.map(rating=>'<a href="'+escape(rating.url)+'" target="_blank" rel="noopener noreferrer">'+escape(rating.name)+' '+rating.weight.toFixed(2)+'/5'+(rating.indirect?'（转引）':'')+' ↗</a>').join(' · ')+(entry.note?'<small>'+escape(entry.note)+'</small>':'')+'</span></li>').join('');
   $('#plaza-rating-date').textContent=CATALOG_CHECKED;
@@ -57,17 +57,28 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
     await flush();
     const legacyNames=newExample?[examples.find(g=>g.id===source.gameId)?.create(()=>.5).name].filter(Boolean):[];
     const existing=findLibraryDraft(await projectStore.list(),source,originKey,legacyNames);
-    const session=existing?.session||{...structuredClone(source),projectId:uid(),originKey};
-    if(edit){await activate(openEditor(session));return;}
-    if(existing?.session.mode==='play'){await activate(session);return;}
-    const opening=session.setupProfiles?.length>1?{...session,mode:'play',objects:[],awaitingOpening:true}:startOpening(session);
-    await activate(opening,{newExample:!existing&&newExample,chooseProfile:!existing});
+    if(edit){await activate(openEditor(existing?.session||{...structuredClone(source),projectId:uid(),originKey}));return;}
+    const saved=await projectStore.getPlay(originKey);
+    // Keep old play progress available without deleting potentially authored drafts.
+    const previous=saved?.session||(existing?.session.mode==='play'&&!existing.session.awaitingOpening?existing.session:null);
+    if(previous){
+      pendingPlay={source:structuredClone(source),originKey,newExample,previous:structuredClone(previous)};
+      const modal=$('#modal');modal.dataset.kind='play-choice';modal.classList.remove('wide');
+      $('#modal-content').innerHTML=`<h2>继续上一局，还是新开一局？</h2><p class="modal-lead">「${escape(source.name)}」有上次的游玩进度。继续原来的冒险，或从初始设置重新开始。</p><button class="primary-button" data-continue-play>继续上一局</button><button class="full-width quiet" data-new-play>新开一局</button><button class="full-width quiet" data-cancel-play>取消</button>`;
+      modal.showModal();return;
+    }
+    await beginPlay(source,originKey,newExample);
+  }
+  async function beginPlay(source,originKey,newExample){
+    const opening=createPlaySession(source,originKey);
+    await activate(opening,{newExample,chooseProfile:true});
   }
   async function run(operation){if(busy)return;busy=true;$('#plaza').setAttribute('aria-busy','true');try{await operation();}catch(error){notify(error.message);}finally{busy=false;$('#plaza').removeAttribute('aria-busy');}}
   const api={
     async show(nextFilter=filter){await flush();filter=nextFilter==='mine'?'mine':'all';$('#app').hidden=true;$('#plaza').hidden=false;$('#plaza-loading').hidden=false;try{[projects,exhibits]=await Promise.all([projectStore.list(),projectStore.exhibits()]);projects.sort((a,b)=>b.updatedAt-a.updatedAt);exhibits.sort((a,b)=>b.publishedAt-a.publishedAt);renderCards();}finally{$('#plaza-loading').hidden=true;}},
     async create(name){await flush();const existing=findLibraryDraft(await projectStore.list(),{name});if(existing){notify('已有同名草稿，已打开原草稿');await activate(openEditor(existing.session));return;}await activate(createProject('custom',name));},
     async import(session){await flush();if(findLibraryDraft(await projectStore.list(),session))throw new Error('本地草稿已有同名游戏，请先修改草稿名称再导入');await activate(openEditor(copyProject(session)));},
+    edit:session=>openGame(session,session.playOriginKey,true,session.playOriginKey?.startsWith('example:')),
     refresh:()=>api.show(filter)
   };
   $('#plaza-search').addEventListener('input',renderCards);
@@ -85,6 +96,12 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
   });
   $('#modal').addEventListener('click',e=>{
     const b=e.target.closest('button');if(!b)return;
+    if(b.hasAttribute('data-cancel-play')){pendingPlay=null;$('#modal').close();}
+    if(b.hasAttribute('data-continue-play')||b.hasAttribute('data-new-play'))run(async()=>{
+      if(!pendingPlay)return;const {source,originKey,newExample,previous}=pendingPlay;pendingPlay=null;
+      if(b.hasAttribute('data-continue-play'))await activate({...previous,originKey,playOriginKey:originKey});
+      else await beginPlay(source,originKey,newExample);
+    });
     if(b.hasAttribute('data-cancel-library-removal')){pendingRemoval=null;$('#modal').close();}
     if(b.hasAttribute('data-confirm-library-removal'))run(async()=>{
       if(!pendingRemoval)return;const {kind,id}=pendingRemoval;await flush();

@@ -44,7 +44,7 @@ function playObjects(items,action='drop'){for(const cue of [...new Set(items.map
 for(const event of ['pointerdown','keydown'])document.addEventListener(event,e=>{if(event==='pointerdown'&&!e.target.closest('#deck-draw-tools,#modal'))closeDeckMenu();if(workspaceLoaded&&!$('#app').hidden)unlockAudio(state.settings.sound);},{capture:true});
 function checkpoint(){history.push(JSON.stringify(state));if(history.length>60)history.shift();future=[];}
 async function saveNow(){
-  clearTimeout(saveTimer);saveTimer=null;if(!workspaceLoaded)return;
+  clearTimeout(saveTimer);saveTimer=null;if(!workspaceLoaded||state.awaitingOpening)return;
   state=saveEditorDraft(state);if(JSON.stringify(state)===savedFingerprint)return;
   const snapshot=structuredClone(state);snapshot.updatedAt=Date.now();
   try{await projectStore.save(snapshot);if(state.projectId===snapshot.projectId){state.updatedAt=snapshot.updatedAt;savedFingerprint=JSON.stringify(snapshot);$('#save-status').textContent=state.mode==='edit'?'草稿已保存':'进度已保存';}storageFailed=false;}
@@ -161,7 +161,7 @@ function renderDrawers(){
   const panel=$('#object-drawer'),open=state.mode==='edit'&&!!primary()&&activeDrawer!=='settings';panel.classList.toggle('open',open);panel.inert=!open;panel.setAttribute('aria-hidden',String(!open));
 }
 function setDrawer(name){if(name&&innerWidth<900){selected.clear();renderSelection();renderInspector();}const previous=activeDrawer;activeDrawer=state.mode==='edit'?name:null;renderDrawers();if(previous&&!activeDrawer&&state.mode==='edit')$(`[data-drawer="${previous}"]`)?.focus({preventScroll:true});}
-function setMode(mode){closeDeckMenu();cancelDrawTarget();if(mode===state.mode)return;if(mode==='play'&&state.setupProfiles?.length>1){chooseOpening();return;}let next;try{next=mode==='play'?startOpening(state):openEditor(state);}catch(error){notify(error.message);return;}checkpoint();state=next;selected.clear();activeDrawer=mode==='edit'?'assets':null;$('#mode-toggle').classList.remove('revealed');render();fit();save();}
+function setMode(mode){closeDeckMenu();cancelDrawTarget();if(mode===state.mode)return;if(mode==='edit'&&state.playOriginKey){plaza.edit(state).catch(error=>notify(error.message));return;}if(mode==='play'&&state.setupProfiles?.length>1){chooseOpening();return;}let next;try{next=mode==='play'?startOpening(state):openEditor(state);}catch(error){notify(error.message);return;}checkpoint();state=next;selected.clear();activeDrawer=mode==='edit'?'assets':null;$('#mode-toggle').classList.remove('revealed');render();fit();save();}
 function revealEditor(){clearTimeout(modeRevealTimer);for(const el of [$('#mode-toggle'),$('#play-plaza')])el.classList.add('revealed');modeRevealTimer=setTimeout(()=>{for(const el of [$('#mode-toggle'),$('#play-plaza')])el.classList.remove('revealed');},3500);}
 function renderSelection(){
   for(const [id,node]of objectNodes){node.classList.toggle('selected',selected.has(id));node.classList.toggle('pile-selected',selected.has(id)&&currentDeckScope()==='pile');if(node.classList.contains('in-hand'))node.setAttribute('aria-pressed',String(selected.has(id)));}
@@ -462,7 +462,7 @@ actions['draw-up']=()=>draw(true);
 actions.plaza=()=>plaza.show('all');
 actions['new-project']=()=>openModal('<span class="section-eyebrow">A TABLE OF YOUR OWN</span><h2>你的下一个游戏。</h2><p class="modal-lead">从空白项目开始，导入图片资产，摆放部件，保存到本地草稿，完成后导出到作品广场。</p><label class="create-project-label">游戏名称<input id="new-project-name" maxlength="100" placeholder="给这个灵感起个名字" value="未命名游戏"></label><button class="primary-button" data-action="confirm-create-project">创建项目 ↗</button>');
 actions['confirm-create-project']=async()=>{const name=$('#new-project-name').value.trim();if(!name){notify('请填写游戏名称');return;}await plaza.create(name);};
-actions['save-draft']=async()=>{await saveNow();notify('已保存到本地草稿');};
+actions['save-draft']=async()=>{await saveNow();notify(state.playOriginKey?'游玩进度已保存':'已保存到本地草稿');};
 actions['download-session']=exportSession;
 async function finishExport(replaceId){
   if(!pendingExport)return;
@@ -807,7 +807,7 @@ document.addEventListener('keyup',e=>{if(e.code==='Space'){spaceDown=false;viewp
 window.addEventListener('blur',()=>{spaceDown=false;viewport.classList.remove('space-pan');if(drag)endDrag({pointerId:drag.pointerId},true);});
 objects.addEventListener('keydown',e=>{if(e.key==='Enter'){const o=state.objects.find(o=>o.id===e.target.closest('.table-object')?.dataset.id);if(o)select(o,e.shiftKey);}});
 $('#modal').addEventListener('click',e=>{if(e.target===$('#modal')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
-$('#modal').addEventListener('close',()=>{if(state.awaitingOpening&&$('#modal').dataset.kind==='opening-choice')plaza.show('all').catch(error=>notify(error.message));});
+$('#modal').addEventListener('close',()=>{if(!$('#modal').open&&state.awaitingOpening&&['opening-choice','expansion-choice'].includes($('#modal').dataset.kind))plaza.show('all').catch(error=>notify(error.message));});
 async function imageData(file){if(file.size>20*1024*1024)throw new Error('单张图片请小于 20 MB');if(!['image/png','image/jpeg','image/webp'].includes(file.type))throw new Error('只支持 PNG、JPG 和 WebP 图片');const image=await createImageBitmap(file);const scale=Math.min(1,1200/Math.max(image.width,image.height)),canvas=document.createElement('canvas');canvas.width=Math.round(image.width*scale);canvas.height=Math.round(image.height*scale);canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);image.close();return {data:canvas.toDataURL('image/webp',.9),width:canvas.width,height:canvas.height,name:file.name.replace(/\.[^.]+$/,'').slice(0,80)};}
 $('#asset-input').addEventListener('change',async e=>{
   const files=[...e.target.files];e.target.value='';if(!files.length)return;
@@ -819,7 +819,7 @@ $('#asset-input').addEventListener('change',async e=>{
 function finishImport(){const type=$('#import-type').value,p=viewportCenter();mutate(()=>{const ids=[];pendingImages.forEach((i,index)=>{const width=type==='card'?160:type==='board'?640:60,height=type==='card'?240:type==='board'?Math.max(40,Math.min(1600,640*i.height/i.width)):60;const asset={id:uid(),type,name:i.name,front:i.data,width,height};state.assets.push(asset);const o={...baseObject(type,p.x+index*25,p.y+index*25,type==='board'?0:nextZ(state)),assetId:asset.id,faceUp:true};if(type==='board'){o.width=width;o.height=height;}if(type==='token'){o.kind='custom';o.name=i.name;o.color='#c79e62';}state.objects.push(o);ids.push(o.id);});selected=new Set(ids);state.mode='edit';tab=type==='card'?'cards':type==='board'?'boards':'tokens';});pendingImages=[];$('#modal').close();notify('素材已加入，可右键查看属性');}
 $('#session-input').addEventListener('change',async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;try{if(file.size>50*1024*1024)throw new Error('存档请小于 50 MB');const imported=migrateSession(JSON.parse(await file.text()));await plaza.import(imported);notify('项目已导入，原项目也会保留');}catch(error){notify(`无法载入：${error.message}`);}});
 
-window.addEventListener('beforeunload',()=>{if(saveTimer&&workspaceLoaded){try{localStorage.setItem(RECOVERY,JSON.stringify({...state,updatedAt:Date.now()}));}catch{}}});
+window.addEventListener('beforeunload',()=>{if(saveTimer&&workspaceLoaded&&!state.awaitingOpening){try{localStorage.setItem(RECOVERY,JSON.stringify({...state,updatedAt:Date.now()}));}catch{}}});
 new ResizeObserver(()=>{if(!drag&&!$('#app').hidden)fit();}).observe(viewport);
 function forgetDraft(ids){
   try{const recovery=JSON.parse(localStorage.getItem(RECOVERY)||'null');if(recovery&&ids.includes(recovery.projectId))localStorage.removeItem(RECOVERY);}catch{}
@@ -829,7 +829,7 @@ function forgetDraft(ids){
 plaza=createPlaza({flush:saveNow,activate:activateSession,notify,forgetDraft});
 async function initialize(){
   try{
-    try{const recovery=localStorage.getItem(RECOVERY);if(recovery){const recovered=migrateSession(JSON.parse(recovery)),record=await projectStore.get(recovered.projectId);if(!record||recovered.updatedAt>record.updatedAt)await projectStore.save(recovered);localStorage.removeItem(RECOVERY);}}catch(error){notify(`恢复存档未能读取，原文件已保留：${error.message}`);}
+    try{const recovery=localStorage.getItem(RECOVERY);if(recovery){const recovered=migrateSession(JSON.parse(recovery)),record=await (recovered.playOriginKey?projectStore.getPlay(recovered.playOriginKey):projectStore.get(recovered.projectId));if(!record||recovered.updatedAt>record.updatedAt)await projectStore.save(recovered);localStorage.removeItem(RECOVERY);}}catch(error){notify(`恢复存档未能读取，原文件已保留：${error.message}`);}
     try{const legacy=localStorage.getItem(STORAGE);if(legacy&&!localStorage.getItem('tablecraft.legacy-migrated')){await projectStore.save(migrateSession(JSON.parse(legacy)));localStorage.setItem('tablecraft.legacy-migrated','yes');}}catch(error){notify(`旧桌面未能迁移，原存档已保留：${error.message}`);}
     await plaza.show('all');
   }catch(error){notify(`本地项目库未能读取：${error.message}`);$('#plaza-loading').textContent='项目库暂时无法读取。你可以导入导出的项目文件。';}
