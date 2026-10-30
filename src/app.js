@@ -1,25 +1,26 @@
 import {assetUrl,assetHTML} from './asset-url.js';
+import {boardImageSource,updateBoardImage} from './board-images.js';
 import {deckControlsHTML,deckSearchHTML} from './deck-controls.js';
 import {canResize,resizeObjects,matchObjectSize} from './sizing.js';
 import {sharedDice,sharedTokens,sharedDieImage,sharedToken} from './shared-assets.js';
 import {SHORTCUT_STORAGE,shortcutDefinitions,defaultShortcuts,eventShortcut,bindingError,loadShortcuts,shortcutAction,deckShortcutAction} from './shortcuts.js';
 import {deckEntries,replaceDeckEntries,flipTopCard,shuffleDeck,setDeckFace,createFixedPile,canMoveObject,adjustTokenValue,adjustDieValue,rotateHeldObject,createSession,applySetup,createDealSlot,validateDeals,assetFor,baseObject,uid,nextZ,rollDieValue,dimensions,objectsInRect,pointOnObject,drawDestination,drawFromDeck,drawDeckCard,takeDeckCard,mergeCards,shuffled,COLORS,COLOR_NAMES} from './model.js';
-import {gameFor,migrateSession,makeExhibit,saveEditorDraft,openEditor,addSetupProfile,switchSetupProfile,updateSetupProfile,removeSetupProfile,startOpening} from './projects.js';
+import {gameFor,migrateSession,makeExhibit,saveEditorDraft,openEditor,addSetupProfile,switchSetupProfile,updateSetupProfile,removeSetupProfile,startOpening} from './project-session.js';
 import {projectStore} from './project-store.js';
-import {createPlaza} from './plaza.js';
+import {notify} from './notify.js';
 import {sound,objectSound,setAudioEnabled,unlockAudio,stopSound} from './audio.js';
 import {wheelIntent,isPanGesture,cardDropPlan,snapCardOnto,startDeckMenuPress,createDeckBottomHover} from './interactions.js';
 import {openingHTML as openingPropertiesHTML,drawTargetHTML,openingChoicesHTML,pileSettingsHTML,sizeSettingsHTML} from './opening-editor.js';
 import {nameMatches,libraryName} from './library.js';
-import {examples} from './projects.js';
+import {exampleCatalog as examples} from './example-catalog.js';
 import {isHandCard,handCards,acceptsHandCard,leaveHand,insertHandCard,sortHand,handFan} from './hands.js';
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let shortcuts=loadShortcuts(localStorage);
-const STORAGE='tablecraft.workspace.v1',RECOVERY='tablecraft.recovery.v2';
+const RECOVERY='tablecraft.recovery.v2';
 let state=createSession(),storageFailed=false,workspaceLoaded=false,plaza,savedFingerprint='';
-let selected=new Set(),history=[],future=[],tab='cards',zoom=1,pan={x:0,y:0},drag=null,saveTimer,toastTimer,spaceDown=false,importPurpose='new',pendingImages=[],rolling=new Set();
+let selected=new Set(),history=[],future=[],tab='cards',zoom=1,pan={x:0,y:0},drag=null,saveTimer,spaceDown=false,importPurpose='new',pendingImages=[],rolling=new Set();
 let metaEditing=null,pendingExport=null,exportReplacementId;
 let pickingDrawTarget=null,deckMenuId=null,openingDraft=null;
 const currentDeckScope=()=>deckMenuId&&primary()?.id===deckMenuId?'pile':'top';
@@ -38,12 +39,11 @@ $('#app').append(handView);
 const handObjects=handView.querySelector('#hand-cards');
 let handLayouts=new Map();
 const icons={flip:'⤾',rotate:'↻',draw:'↗',shuffle:'⤨',stack:'▱',lock:'⌑',inspect:'⤢',delete:'×'};
-function notify(text){$('#toast').textContent=text;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),3200);}
 function play(kind,options){sound(kind,state.settings.sound,options);}
 function playObjects(items,action='drop'){for(const cue of [...new Set(items.map(o=>objectSound(o,action)))].slice(0,3))play(cue);}
 for(const event of ['pointerdown','keydown'])document.addEventListener(event,e=>{if(event==='pointerdown'&&!e.target.closest('#deck-draw-tools,#modal'))closeDeckMenu();if(workspaceLoaded&&!$('#app').hidden)unlockAudio(state.settings.sound);},{capture:true});
 function checkpoint(){history.push(JSON.stringify(state));if(history.length>60)history.shift();future=[];}
-async function saveNow(){
+export async function saveNow(){
   clearTimeout(saveTimer);saveTimer=null;if(!workspaceLoaded||state.awaitingOpening)return;
   state=saveEditorDraft(state);if(JSON.stringify(state)===savedFingerprint)return;
   const snapshot=structuredClone(state);snapshot.updatedAt=Date.now();
@@ -56,15 +56,15 @@ function commonDiceTemplates(){return [...sharedDice,...['ivory','orange','lemon
 function diceTemplates(){return [...commonDiceTemplates(),...(game()?.dice||[])];}
 function commonTokenTemplates(){return [...sharedTokens,{kind:'disc',name:'圆形标记',color:'#c79e62',description:'自由用途 · 可修改颜色'}];}
 function tokenTemplates(){return [...commonTokenTemplates(),...(game()?.tokens||[])];}
-async function activateSession(session,{newExample=false,chooseProfile=false}={}){
+export async function activateSession(session,{newExample=false,chooseProfile=false}={}){
   closeDeckMenu();cancelDrawTarget();state=migrateSession(session);workspaceLoaded=true;savedFingerprint='';selected.clear();rolling.clear();history=[];future=[];tab=gameTab='cards';activeDrawer=state.mode==='edit'?'assets':null;
   if(state.mode==='play'&&(state.awaitingOpening||(newExample||chooseProfile)&&state.setupProfiles?.length>1)){state.awaitingOpening=true;state.objects=[];}
   $('#modal').close();$('#plaza').hidden=true;$('#app').hidden=false;
-  setAudioEnabled(state.settings.sound);render();requestAnimationFrame(fit);await saveNow();
+  setAudioEnabled(state.settings.sound);render({fitView:true});await saveNow();
   if(state.awaitingOpening||(newExample||chooseProfile)&&state.setupProfiles?.length>1)chooseOpening();else if(newExample&&game()?.startView)gameAction(game().startView,'');
 }
 
-function mutate(fn,{audio=null}={}){checkpoint();fn();setAudioEnabled(state.settings.sound);render();save();if(typeof audio==='function')audio();else if(audio)play(audio);}
+function mutate(fn,{audio=null,fitView=false}={}){checkpoint();fn();setAudioEnabled(state.settings.sound);render({fitView});save();if(typeof audio==='function')audio();else if(audio)play(audio);}
 function selection(){return state.objects.filter(o=>selected.has(o.id));}
 function primary(){return selection().at(-1);}
 function select(o,add=false){const prior=primary()?.id;if(!add)selected.clear();if(o){if(add&&selected.has(o.id))selected.delete(o.id);else selected.add(o.id);}renderSelection();renderInspector();renderDrawTarget();if(primary()?.id!==prior)$('#inspector-content').scrollTop=0;renderDrawers();}
@@ -79,7 +79,7 @@ function cancelDrawTarget(){pickingDrawTarget=null;viewport.classList.remove('pi
 function objectName(o){if(o.type==='deal')return o.name||'初始牌位';if(o.type==='card')return o.faceUp===false?'背面朝上的卡牌':assetFor(state,o.assetId)?.name||'卡牌';if(o.type==='deck')return o.name||'牌堆';if(o.type==='die')return o.name||`${COLOR_NAMES[o.color]||'自定义'}骰子`;if(o.type==='board')return assetFor(state,o.assetId)?.name||'版图';return o.name||'标记';}
 function texture(id,face=true){const a=assetFor(state,id);return assetUrl(face?a?.front:a?.back);}
 function fallbackBack(){return '<div class="custom-back"><span>✳</span><small>TABLECRAFT</small></div>';}
-function cardFace(url,back=false){return url?`<img src="${escape(url)}" alt="${back?'卡牌背面':'卡牌正面'}" draggable="false">`:fallbackBack();}
+function cardFace(url,back=false,{deferred=false}={}){return url?`<img ${deferred?'data-face-src':'src'}="${escape(url)}" alt="${back?'卡牌背面':'卡牌正面'}" decoding="async" draggable="false">`:fallbackBack();}
 function pips(value){if(value>6)return `<span class="face-number">${value}</span>`;const patterns={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};return `<span class="pips">${Array.from({length:9},(_,i)=>`<i class="${patterns[value]?.includes(i)?'pip':''}"></i>`).join('')}</span>`;}
 function dieVisual(o){const image=sharedDieImage(o.skin,o.value)||game()?.dieImage?.(o);return image?`<img class="shared-die-image" src="${assetUrl(image)}" alt="" draggable="false">`:pips(o.value);}
 function dieHTML(o){return `<div class="die-face ${sharedDieImage(o.skin,o.value)?'shared-die-face':''}" aria-hidden="true">${dieVisual(o)}</div>`;}
@@ -103,13 +103,13 @@ function syncObjects(){
     if(node.parentNode!==parent)parent.append(node);
     const signature=nodeSignature(o);
     if(node.dataset.signature!==signature){
-      if(o.type==='card')node.innerHTML=`<div class="card-shadow"></div><div class="card-lift"><div class="card-flipper"><div class="card-side card-front">${cardFace(texture(o.assetId,true))}</div><div class="card-side card-back">${cardFace(texture(o.assetId,false),true)}</div></div></div>`;
+      if(o.type==='card')node.innerHTML=`<div class="card-shadow"></div><div class="card-lift"><div class="card-flipper"><div class="card-side card-front">${cardFace(texture(o.assetId,true),false,{deferred:o.faceUp===false})}</div><div class="card-side card-back">${cardFace(texture(o.assetId,false),true,{deferred:o.faceUp!==false})}</div></div></div>`;
       else if(o.type==='deck')node.innerHTML=`<div class="deck-layers">${Array.from({length:Math.min(6,o.cards.length)},(_,i)=>`<div class="deck-layer" style="--layer:${i};--phase:${((i*7)%5-2)*state.settings.scatter/3}deg"></div>`).join('')}</div><div class="deck-top">${o.cards.length?cardFace(texture(o.cards.at(-1),o.faceUp),!o.faceUp):`<span class="empty-pile">${o.fixedPosition?'':'牌堆已空'}</span>`}</div>${o.maxCards===1?'':`<span class="deck-count">${o.cards.length}</span>`}${o.fixedPosition?`<span class="pile-guide" aria-hidden="true"></span><span class="pile-label" aria-hidden="true">${escape(o.name||'固定牌位')}</span>`:`<span class="deck-caption">${escape(o.name)}</span>`}`;
       else if(o.type==='die')node.innerHTML=dieHTML(o);
       else if(o.type==='token')node.innerHTML=`<div class="token-body">${tokenFace(o)}</div>`;
       else if(o.type==='deal'&&o.layout==='deck')node.innerHTML=`<div class="deck-layers"></div><div class="deck-top"><span class="empty-pile"></span></div>${o.maxCards===1?'':`<span class="deck-count">${o.count}</span>`}${o.fixedPosition?`<span class="pile-guide" aria-hidden="true"></span><span class="pile-label" aria-hidden="true">${escape(o.name)}</span>`:`<span class="deck-caption">${escape(o.name)}</span>`}`;
       else if(o.type==='deal')node.innerHTML=`<div class="deal-placeholder"><span>↗</span><strong>${escape(o.name)}</strong><small>${o.count} 张 · ${escape(state.objects.find(d=>d.type==='deck'&&d.setupKey===o.sourceKey)?.name||'选择来源牌堆')}</small><em>${o.layout==='deck'?'开局生成牌堆':'开局展开单牌'}</em></div>`;
-      else node.innerHTML=`<img class="board-image" src="${escape(texture(o.assetId))}" draggable="false" alt="${escape(objectName(o))}">${game()?.boardOverlay?.(state,o)||''}`;
+      else node.innerHTML=`<img class="board-image" decoding="async" draggable="false" alt="${escape(objectName(o))}">${game()?.boardOverlay?.(state,o)||''}`;
       node.dataset.signature=signature;
     }
     const {w,h}=dimensions(state,o);
@@ -122,6 +122,8 @@ function syncObjects(){
     if(o.type==='card'){
       node.querySelector('.card-front').setAttribute('aria-hidden',String(o.faceUp===false));
       node.querySelector('.card-back').setAttribute('aria-hidden',String(o.faceUp!==false));
+      const visible=node.querySelector(o.faceUp===false?'.card-back img':'.card-front img');
+      if(visible?.dataset.faceSrc){visible.src=visible.dataset.faceSrc;delete visible.dataset.faceSrc;}
     }
     node.setAttribute('aria-label',`${objectName(o)}${o.type==='die'?'，点数 '+o.value:o.type==='token'&&Number.isFinite(o.value)?'，数值 '+o.value:''}${o.fixedPosition?'，固定牌位':''}${o.locked?'，已锁定':''}`);
     if(o.type==='deck'){const img=node.querySelector('.deck-top img');if(img)img.src=texture(o.cards.at(-1),o.faceUp);}
@@ -133,7 +135,7 @@ function syncObjects(){
 }
 function objectLayer(o){return o.type==='board'?-100+o.z/1000000:['die','token'].includes(o.type)?1000000+o.z:o.z;}
 function updateDie(node,o){const face=node.querySelector('.die-face');if(face&&face.dataset.value!==String(o.value)){face.innerHTML=dieVisual(o);face.dataset.value=String(o.value);}}
-function render(){
+function render({fitView=false}={}){
   $('#app').dataset.mode=state.mode;
   $('#app').dataset.game=state.gameId;
   renderShortcutHints();
@@ -155,13 +157,23 @@ function render(){
   scene.dataset.game=state.gameId;
   $('#game-zones').innerHTML=(game()?.zones||[]).map(z=>`<div class="zone ${escape(z.className)}" ${z.box?`style="left:${z.box[0]}px;top:${z.box[1]}px;width:${z.box[2]}px;height:${z.box[3]}px"`:''}><span>${escape(z.label)}</span><small>${escape(z.subtitle)}</small></div>`).join('');
   $('[data-action="undo"]').disabled=!history.length;$('[data-action="redo"]').disabled=!future.length;
+  if(fitView)fit();else updateBoardImages();
 }
+function updateBoardImages(){
+  for(const object of state.objects){
+    if(object.type!=='board')continue;
+    const image=objectNodes.get(object.id)?.querySelector('.board-image');
+    const {w:width,h:height}=dimensions(state,object);
+    if(image)updateBoardImage(image,assetFor(state,object.assetId)?.front,{width,height,zoom,pixelRatio:devicePixelRatio});
+  }
+}
+const boardPreview=front=>assetUrl(boardImageSource(front));
 function renderDrawers(){
   for(const name of ['assets','settings']){const el=$(`#${name}-drawer`),open=state.mode==='edit'&&activeDrawer===name&&(name!=='assets'||innerWidth>=900||!primary());el.classList.toggle('open',open);el.inert=!open;el.setAttribute('aria-hidden',String(!open));const trigger=$(`[data-drawer="${name}"]`);trigger.classList.toggle('active',open);trigger.setAttribute('aria-expanded',String(open));}
   const panel=$('#object-drawer'),open=state.mode==='edit'&&!!primary()&&activeDrawer!=='settings';panel.classList.toggle('open',open);panel.inert=!open;panel.setAttribute('aria-hidden',String(!open));
 }
 function setDrawer(name){if(name&&innerWidth<900){selected.clear();renderSelection();renderInspector();}const previous=activeDrawer;activeDrawer=state.mode==='edit'?name:null;renderDrawers();if(previous&&!activeDrawer&&state.mode==='edit')$(`[data-drawer="${previous}"]`)?.focus({preventScroll:true});}
-function setMode(mode){closeDeckMenu();cancelDrawTarget();if(mode===state.mode)return;if(mode==='edit'&&state.playOriginKey){plaza.edit(state).catch(error=>notify(error.message));return;}if(mode==='play'&&state.setupProfiles?.length>1){chooseOpening();return;}let next;try{next=mode==='play'?startOpening(state):openEditor(state);}catch(error){notify(error.message);return;}checkpoint();state=next;selected.clear();activeDrawer=mode==='edit'?'assets':null;$('#mode-toggle').classList.remove('revealed');render();fit();save();}
+function setMode(mode){closeDeckMenu();cancelDrawTarget();if(mode===state.mode)return;if(mode==='edit'&&state.playOriginKey){plaza.edit(state).catch(error=>notify(error.message));return;}if(mode==='play'&&state.setupProfiles?.length>1){chooseOpening();return;}let next;try{next=mode==='play'?startOpening(state):openEditor(state);}catch(error){notify(error.message);return;}checkpoint();state=next;selected.clear();activeDrawer=mode==='edit'?'assets':null;$('#mode-toggle').classList.remove('revealed');render({fitView:true});save();}
 function revealEditor(){clearTimeout(modeRevealTimer);for(const el of [$('#mode-toggle'),$('#play-plaza')])el.classList.add('revealed');modeRevealTimer=setTimeout(()=>{for(const el of [$('#mode-toggle'),$('#play-plaza')])el.classList.remove('revealed');},3500);}
 function renderSelection(){
   for(const [id,node]of objectNodes){node.classList.toggle('selected',selected.has(id));node.classList.toggle('pile-selected',selected.has(id)&&currentDeckScope()==='pile');if(node.classList.contains('in-hand'))node.setAttribute('aria-pressed',String(selected.has(id)));}
@@ -215,7 +227,7 @@ function renderLibrary(){
   }else if(tab==='public'){
     renderPublicLibrary(el);
   }else{
-    const assets=state.assets.filter(a=>a.type==='board');$('#asset-total').textContent=`${assets.length} 张版图`;el.innerHTML=`<div class="asset-intro"><h3>铺开一个新世界。</h3><p>导入 PNG、JPG 或 WebP 作为版图。<br>版图支持缩放、旋转与锁定。</p></div>${assets.map(a=>`<button class="board-asset" data-add-asset="${escape(a.id)}"><img src="${escape(assetUrl(a.front))}" alt="${escape(a.name)}"><strong>${escape(a.name)}</strong><span>＋</span></button>`).join('')}<button class="board-placeholder" data-action="import-board"><span>⊞</span>导入你的第一张版图</button>`;
+    const assets=state.assets.filter(a=>a.type==='board');$('#asset-total').textContent=`${assets.length} 张版图`;el.innerHTML=`<div class="asset-intro"><h3>铺开一个新世界。</h3><p>导入 PNG、JPG 或 WebP 作为版图。<br>版图支持缩放、旋转与锁定。</p></div>${assets.map(a=>`<button class="board-asset" data-add-asset="${escape(a.id)}"><img src="${escape(boardPreview(a.front))}" loading="lazy" decoding="async" alt="${escape(a.name)}"><strong>${escape(a.name)}</strong><span>＋</span></button>`).join('')}<button class="board-placeholder" data-action="import-board"><span>⊞</span>导入你的第一张版图</button>`;
   }
 }
 function openingHTML(o){return sizeSettingsHTML(state,o)+pileSettingsHTML(state,o)+drawTargetHTML(state,o)+openingPropertiesHTML(state,o);}
@@ -237,7 +249,7 @@ function manageProfiles(){
   openModal(`<h2>角色开局方案</h2><p class="modal-lead">这里的名称、封面和说明会直接显示在游玩的开局选项中。点击卡片编辑对应桌面，修改会自动保存。</p>${openingChoicesHTML(draft,{editing:true})||''}${active?`<label class="create-project-label">当前方案<select id="profile-select">${profiles.map(p=>`<option value="${escape(p.id)}" ${p.id===active.id?'selected':''}>${escape(p.name)}</option>`).join('')}</select></label>`:''}<label class="create-project-label">方案名称<input id="profile-name" maxlength="100" placeholder="例如：战士、法师" value="${escape(active?.name||'')}"></label>${active?`<label class="create-project-label">开局封面<select id="profile-cover"><option value="auto" ${active.coverAssetId===undefined?'selected':''}>跟随桌面角色卡</option><option value="" ${active.coverAssetId===''?'selected':''}>不显示封面</option>${covers.map(a=>`<option value="${escape(a.id)}" ${a.id===active.coverAssetId?'selected':''}>${escape(a.name)}</option>`).join('')}</select></label><label class="create-project-label">开局说明<textarea id="profile-description" maxlength="300" rows="2" placeholder="例如：适合初次冒险的近战角色">${escape(active.description||'')}</textarea></label><button class="primary-button" data-action="save-profile-options">保存开局选项</button><button class="full-width quiet" data-action="preview-opening">预览游玩开局</button>`:''}<button class="full-width quiet" data-action="add-profile">复制当前摆放为新方案</button>${profiles.length>1?'<button class="danger-button" data-action="remove-profile">移除当前方案</button>':''}`,profiles.some(p=>p.setup.objects.some(o=>o.ihRole==='hero'))||profiles.some(p=>p.coverAssetId));
 }
 function editProfile(id){
-  try{const draft=switchSetupProfile(state,id);$('#modal').close();mutate(()=>{state=draft;selected.clear();});fit();notify(`正在编辑：${state.setupProfiles.find(p=>p.id===id).name}`);}catch(error){notify(error.message);}
+  try{const draft=switchSetupProfile(state,id);$('#modal').close();mutate(()=>{state=draft;selected.clear();},{fitView:true});notify(`正在编辑：${state.setupProfiles.find(p=>p.id===id).name}`);}catch(error){notify(error.message);}
 }
 function chooseOpening(){
   openingDraft=null;
@@ -255,7 +267,7 @@ function syncExpansionChoices(){
 }
 
 function beginOpening(id){
-  try{const next=startOpening(openingDraft||state,id);openingDraft=null;$('#modal').close();activeDrawer=null;mutate(()=>{state=next;selected.clear();},{audio:'shuffle'});fit();}catch(error){notify(error.message);}
+  try{const next=startOpening(openingDraft||state,id);openingDraft=null;$('#modal').close();activeDrawer=null;mutate(()=>{state=next;selected.clear();},{audio:'shuffle',fitView:true});}catch(error){notify(error.message);}
 }
 function updateOpening(input){
   const key=input.dataset.opening,items=selection().filter(o=>key==='setupOrder'?o.type==='deck':key==='value'?o.type==='token':key==='faceUp'?['card','deck','token'].includes(o.type):['card','deck','token','die'].includes(o.type));
@@ -270,14 +282,14 @@ function renderInspector(){
   if(!o){el.innerHTML='';return;}else{
     const a=assetFor(state,o.assetId),step=game()?.rotationStep?.(state,o),nudge=step&&step!==90?step:15;
     el.innerHTML=`<div class="selected-heading"><span class="tiny-label">${items.length>1?`已选择 ${items.length} 个物件`:'当前选中'}</span><h2>${escape(objectName(o))}</h2><span class="object-type">${({card:'双面卡牌',deck:o.maxCards===1?'固定牌位':`牌堆 · ${o.cards?.length || 0} 张`,die:`${o.faces?.length??6} 面骰 · 单面显示`,token:'桌面标记',board:'自定义版图',deal:'开局发牌位置'})[o.type]}</span></div>`+openingHTML(o)+
-    (o.type==='card'?`<button class="inspector-card" data-action="inspect">${cardFace(texture(o.assetId,o.faceUp),!o.faceUp)}</button><div class="two-buttons"><button data-action="flip">⤾ 翻面 <kbd>F</kbd></button><button data-action="rotate">↻ 旋转 <kbd>R</kbd></button></div>`:o.type==='deck'?`<div class="deck-preview">${o.cards.length?cardFace(texture(o.cards.at(-1),o.faceUp)):fallbackBack()}${o.maxCards===1?'':`<b>${o.cards.length}</b>`}</div><button class="primary-button" data-action="draw" ${!o.cards.length?'disabled':''}>发到指定位置 ↗</button><div class="two-buttons"><button data-action="shuffle">⤨ 洗牌</button><button data-action="spread">▱ 展开全部</button></div><p class="subtle-note">${state.mode==='edit'?'点击选择牌堆，直接拖动整叠来安排开局。':o.fixedPosition?'固定牌位：直接拖动取顶牌，牌位保持固定。':'直接拖动取顶牌，长按打开牌堆菜单。'}默认操作顶牌；长按打开牌堆菜单，菜单中 D 发牌、S 搜寻、R 洗牌。Shift 多选卡牌后按 G 可合堆。</p>`:o.type==='die'?`<div class="die-preview" style="--swatch:${COLORS[o.color]}"><span>${dieVisual(o)}</span><small>${escape(o.name||COLOR_NAMES[o.color])} · D${o.faces.length}</small></div><button class="primary-button" data-action="roll">⚄ 掷出这一颗 <kbd>D</kbd></button><div class="inspector-section"><h3>手动调整骰面</h3><div class="face-picker">${o.faces.map(v=>`<button data-die-value="${v}" class="${v===o.value?'active':''}">${v}</button>`).join('')}</div><p class="subtle-note">选中后按数字键切换骰面，<kbd>0</kbd> 对应 10 点。<br>开局时可保留当前骰面，或随机投掷。</p></div>`:o.type==='token'?`<div class="token-preview" style="background:${/^#[0-9a-f]{6}$/i.test(o.color)?o.color:'#b86231'}">${tokenFace(o)}</div><p class="subtle-note">${escape(tokenTemplates().find(t=>t.kind===o.kind)?.description||'自由拖动、复制和摆放，记录你的游戏状态。')}</p>`:o.type==='deal'?'<p class="subtle-note">这是发牌位置，开始游玩后才会生成实际卡牌。可以直接拖动、旋转和复制。</p>':`<img class="board-preview" src="${escape(assetUrl(a?.front))}" alt="版图预览">`)+
+    (o.type==='card'?`<button class="inspector-card" data-action="inspect">${cardFace(texture(o.assetId,o.faceUp),!o.faceUp)}</button><div class="two-buttons"><button data-action="flip">⤾ 翻面 <kbd>F</kbd></button><button data-action="rotate">↻ 旋转 <kbd>R</kbd></button></div>`:o.type==='deck'?`<div class="deck-preview">${o.cards.length?cardFace(texture(o.cards.at(-1),o.faceUp)):fallbackBack()}${o.maxCards===1?'':`<b>${o.cards.length}</b>`}</div><button class="primary-button" data-action="draw" ${!o.cards.length?'disabled':''}>发到指定位置 ↗</button><div class="two-buttons"><button data-action="shuffle">⤨ 洗牌</button><button data-action="spread">▱ 展开全部</button></div><p class="subtle-note">${state.mode==='edit'?'点击选择牌堆，直接拖动整叠来安排开局。':o.fixedPosition?'固定牌位：直接拖动取顶牌，牌位保持固定。':'直接拖动取顶牌，长按打开牌堆菜单。'}默认操作顶牌；长按打开牌堆菜单，菜单中 D 发牌、S 搜寻、R 洗牌。Shift 多选卡牌后按 G 可合堆。</p>`:o.type==='die'?`<div class="die-preview" style="--swatch:${COLORS[o.color]}"><span>${dieVisual(o)}</span><small>${escape(o.name||COLOR_NAMES[o.color])} · D${o.faces.length}</small></div><button class="primary-button" data-action="roll">⚄ 掷出这一颗 <kbd>D</kbd></button><div class="inspector-section"><h3>手动调整骰面</h3><div class="face-picker">${o.faces.map(v=>`<button data-die-value="${v}" class="${v===o.value?'active':''}">${v}</button>`).join('')}</div><p class="subtle-note">选中后按数字键切换骰面，<kbd>0</kbd> 对应 10 点。<br>开局时可保留当前骰面，或随机投掷。</p></div>`:o.type==='token'?`<div class="token-preview" style="background:${/^#[0-9a-f]{6}$/i.test(o.color)?o.color:'#b86231'}">${tokenFace(o)}</div><p class="subtle-note">${escape(tokenTemplates().find(t=>t.kind===o.kind)?.description||'自由拖动、复制和摆放，记录你的游戏状态。')}</p>`:o.type==='deal'?'<p class="subtle-note">这是发牌位置，开始游玩后才会生成实际卡牌。可以直接拖动、旋转和复制。</p>':`<img class="board-preview" src="${escape(boardPreview(a?.front))}" alt="版图预览">`)+
     `<div class="inspector-section"><div class="section-title"><h3>物件属性</h3><button data-action="lock" class="text-button">${o.locked?'⌑ 已锁定':'⌑ 锁定'}</button></div><div class="property-row"><label>角度 <input type="number" data-property="rotation" value="${Math.round(o.rotation)}" step="${nudge}" min="-360" max="360" ${!isMovable(o)?'disabled':''}></label><span>°</span></div><div class="two-buttons"><button data-action="rotate-left">↶ −${nudge}°</button><button data-action="rotate-small">↻ +${nudge}°</button></div>${o.type==='token'&&!sharedToken(o.kind)&&state.mode==='edit'?`<div class="property-row"><label>标记颜色 <input type="color" data-property="color" value="${/^#[0-9a-f]{6}$/i.test(o.color)?o.color:'#b86231'}"></label></div>`:''}<div class="two-buttons"><button data-action="duplicate">⧉ 复制</button><button data-action="bring-front">↑ 置顶</button></div>${(o.type==='card'||o.type==='token'&&o.kind==='custom')&&state.mode==='edit'?'<button class="full-width quiet" data-action="change-back">更换背面图片 ↗</button>':''}<button class="danger-button" data-action="delete">移除选中物件</button></div>`;
   }
   if(orderOpen&&el.querySelector('.opening-properties details')){el.querySelector('.opening-properties details').open=true;el.querySelector('.deck-order').scrollTop=orderScroll;}
   if($('#modal').open&&$('#modal').dataset.kind==='properties')$('#modal-content').innerHTML=el.innerHTML;
 }
 function settingsHTML(){return `<div class="project-fields"><h3>项目资料</h3><label>游戏名称<input data-meta="name" maxlength="100" value="${escape(state.name)}"></label><label>一句话介绍<textarea data-meta="description" maxlength="1000" rows="2">${escape(state.meta?.description)}</textarea></label><div class="project-field-pair"><label>人数<input data-meta="players" maxlength="100" placeholder="例如 2–4 人" value="${escape(state.meta?.players)}"></label><label>时长<input data-meta="duration" maxlength="100" placeholder="例如 20 分钟" value="${escape(state.meta?.duration)}"></label></div><label>规则说明<textarea data-meta="rules" maxlength="20000" rows="4" placeholder="写下你的游戏玩法…">${escape(state.meta?.rules)}</textarea></label><button class="full-width quiet" data-action="plaza">返回作品广场</button></div><div class="inspector-section table-settings"><h3>桌布与交互</h3><label class="toggle-row"><span>操作音效</span><input type="checkbox" data-setting="sound" ${state.settings.sound?'checked':''}><i></i></label><label class="toggle-row"><span>显示网格</span><input type="checkbox" data-setting="grid" ${state.settings.grid?'checked':''}><i></i></label><label class="toggle-row"><span>${escape(game()?.snapLabel||'网格吸附')}</span><input type="checkbox" data-setting="snap" ${state.settings.snap?'checked':''}><i></i></label><label class="range-row"><span>摆放自然错位 <b>${state.settings.scatter}°</b></span><input type="range" min="0" max="12" value="${state.settings.scatter}" data-setting="scatter"></label><div class="theme-picker">${[['forest','苔绿'],['linen','亚麻'],['night','深夜']].map(([v,n])=>`<button data-theme="${v}" class="${state.settings.theme===v?'active':''}" title="${n}"><i class="${v}"></i>${n}</button>`).join('')}</div></div>`;}
-function transformScene(){scene.style.transform=`translate(${pan.x}px,${pan.y}px) scale(${zoom})`;$('#zoom-label').textContent=`${Math.round(zoom*100)}%`;renderDeckDrawTools();}
+function transformScene(){scene.style.transform=`translate(${pan.x}px,${pan.y}px) scale(${zoom})`;$('#zoom-label').textContent=`${Math.round(zoom*100)}%`;renderDeckDrawTools();updateBoardImages();}
 function fitObjects(items){
   const r=viewport.getBoundingClientRect();if(!r.width||!r.height)return;
   const insets=game()?.viewInsets?.(r)||{},width=r.width-(insets.left||0)-(insets.right||0);
@@ -452,7 +464,7 @@ function exportSession(){const blob=new Blob([JSON.stringify(saveEditorDraft(sta
 function confirmNew(){if(state.setupProfiles?.length>1){chooseOpening();return;}const setup=state.setup||state.initialSetup;openModal(`<span class="section-eyebrow">A FRESH START</span><h2>从初始设置开始。</h2><p class="modal-lead">使用「${escape(setup.name)}」布置 ${setup.objects.length} 个物件。当前布局将被替换，你仍可用撤销恢复。${setup.objects.length?'':'你也可以先在编辑模式摆放并保存草稿。'}</p><button class="primary-button" data-action="confirm-new">开始新一局 ↗</button><button class="full-width quiet" data-action="download-session">下载当前进度备份</button>`);}
 
 function properties(){if(!primary())return;if(state.mode==='edit'){setDrawer(null);return;}openModal($('#inspector-content').innerHTML);$('#modal').dataset.kind='properties';}
-const actions={flip,rotate,draw,shuffle,stack,spread,roll,undo,redo:()=>undo(true),delete:remove,duplicate,rules,help,inspect,export:exportSession,'new-game':confirmNew,'confirm-new':()=>{mutate(()=>{state=startOpening(state);selected.clear();},{audio:'shuffle'});$('#modal').close();fit();},'close-modal':()=>$('#modal').close(),'inspect-flip':()=>{flip();inspect();},'rotate-left':()=>rotate(-15),'rotate-small':()=>rotate(15),'bring-front':()=>mutate(()=>selection().filter(isMovable).forEach((o,i)=>o.z=nextZ(state)+i)),'lock':()=>{const items=selection();if(items.length)mutate(()=>{const lock=!items.every(o=>o.locked);items.forEach(o=>o.locked=lock);});},'sound':()=>{mutate(()=>state.settings.sound=!state.settings.sound);if(state.settings.sound)play('drop');notify(state.settings.sound?'音效已开启':'音效已关闭');},'grid':()=>mutate(()=>state.settings.grid=!state.settings.grid),'zoom-in':()=>zoomAt(1.15),'zoom-out':()=>zoomAt(1/1.15),'fit':fit,'reset-view':resetView,'import-assets':()=>{importPurpose='new';$('#asset-input').click();},'import-board':()=>{importPurpose='board';$('#asset-input').click();},'change-back':()=>{importPurpose='back';$('#asset-input').click();},'import-session':()=>$('#session-input').click(),'confirm-import':()=>finishImport()};
+const actions={flip,rotate,draw,shuffle,stack,spread,roll,undo,redo:()=>undo(true),delete:remove,duplicate,rules,help,inspect,export:exportSession,'new-game':confirmNew,'confirm-new':()=>{mutate(()=>{state=startOpening(state);selected.clear();},{audio:'shuffle',fitView:true});$('#modal').close();},'close-modal':()=>$('#modal').close(),'inspect-flip':()=>{flip();inspect();},'rotate-left':()=>rotate(-15),'rotate-small':()=>rotate(15),'bring-front':()=>mutate(()=>selection().filter(isMovable).forEach((o,i)=>o.z=nextZ(state)+i)),'lock':()=>{const items=selection();if(items.length)mutate(()=>{const lock=!items.every(o=>o.locked);items.forEach(o=>o.locked=lock);});},'sound':()=>{mutate(()=>state.settings.sound=!state.settings.sound);if(state.settings.sound)play('drop');notify(state.settings.sound?'音效已开启':'音效已关闭');},'grid':()=>mutate(()=>state.settings.grid=!state.settings.grid),'zoom-in':()=>zoomAt(1.15),'zoom-out':()=>zoomAt(1/1.15),'fit':fit,'reset-view':resetView,'import-assets':()=>{importPurpose='new';$('#asset-input').click();},'import-board':()=>{importPurpose='board';$('#asset-input').click();},'change-back':()=>{importPurpose='back';$('#asset-input').click();},'import-session':()=>$('#session-input').click(),'confirm-import':()=>finishImport()};
 actions.properties=properties;
 actions['reset-shortcuts']=()=>{if(storeShortcuts(defaultShortcuts())){help();$('#shortcut-feedback').textContent='已恢复默认快捷键';}};
 actions['search-deck']=searchDeck;
@@ -489,7 +501,7 @@ actions['add-fixed-pile']=()=>{const p=viewportCenter(),reference=primary();muta
 actions['add-matching-pile']=()=>{const reference=primary();if(state.mode!=='edit'||!canResize(reference))return;const {w,h}=dimensions(state,reference);mutate(()=>{const o={...createFixedPile(Math.min(10000,reference.x+w+30),reference.y),width:w,height:h,rotation:reference.rotation,z:nextZ(state)};state.objects.push(o);selected=new Set([o.id]);});};
 actions['make-fixed-pile']=()=>{const o=primary();if(state.mode!=='edit'||o?.type!=='card')return;const {w,h}=dimensions(state,o);mutate(()=>{o.width=w;o.height=h;o.cards=[o.assetId];delete o.assetId;Object.assign(o,{type:'deck',name:assetFor(state,o.cards[0])?.name||'固定牌位',fixedPosition:true,snapCards:true,maxCards:1});});};
 
-actions['add-profile']=()=>{const next=addSetupProfile(state,$('#profile-name').value);$('#modal').close();mutate(()=>{state=next;selected.clear();});fit();notify('角色方案已创建，直接在桌面上调整装备和数值');};
+actions['add-profile']=()=>{const next=addSetupProfile(state,$('#profile-name').value);$('#modal').close();mutate(()=>{state=next;selected.clear();},{fitView:true});notify('角色方案已创建，直接在桌面上调整装备和数值');};
 actions['save-profile-options']=()=>{const next=updateSetupProfile(state,{name:$('#profile-name').value,coverAssetId:$('#profile-cover').value==='auto'?undefined:$('#profile-cover').value,description:$('#profile-description').value});mutate(()=>state=next);manageProfiles();notify('开局选项已保存，游玩时同步显示');};
 actions['ih-clear-expansions']=()=>{$$('[data-ih-expansion]').forEach(el=>el.checked=false);syncExpansionChoices();};
 actions['ih-all-expansions']=()=>{$$('[data-ih-expansion]').forEach(el=>el.checked=true);syncExpansionChoices();};
@@ -514,7 +526,7 @@ actions['ih-choose-roles']=()=>{
   }catch(error){notify(error.message);}
 };
 actions['preview-opening']=()=>{actions['save-profile-options']();chooseOpening();};
-actions['remove-profile']=()=>{const next=removeSetupProfile(state);$('#modal').close();mutate(()=>{state=next;selected.clear();});fit();notify('已移除方案，可撤销恢复');};
+actions['remove-profile']=()=>{const next=removeSetupProfile(state);$('#modal').close();mutate(()=>{state=next;selected.clear();},{fitView:true});notify('已移除方案，可撤销恢复');};
 actions['pick-draw-target']=()=>{const o=primary();if(state.mode!=='edit'||!(o?.type==='deck'||o?.type==='deal'&&o.layout==='deck'))return;pickingDrawTarget=o.id;viewport.classList.add('picking-draw-target');setDrawer(null);notify('点击桌面指定发牌位置，Esc 取消');};
 actions['clear-draw-target']=()=>{cancelDrawTarget();const o=primary();if(state.mode==='edit'&&o?.drawTarget)mutate(()=>delete o.drawTarget);};
 actions['add-deal']=()=>{const draft=structuredClone(state),source=draft.objects.find(o=>o.id===primary()?.id),slot=createDealSlot(draft,source);draft.objects.push(slot);validateDeals(draft.objects);mutate(()=>{state=draft;selected=new Set([slot.id]);});notify('已添加初始牌位，拖动它安排位置并设置数量');};
@@ -567,7 +579,7 @@ document.addEventListener('change',e=>{
     if(!el.value.trim()||!Number.isFinite(value)||Math.abs(value)>limit||key==='gap'&&value<0){notify('请输入有效范围内的坐标或角度');renderInspector();return;}
     mutate(()=>o.drawTarget[key]=value);return;
   }
-  if(el.id==='profile-select'){const next=switchSetupProfile(state,el.value);mutate(()=>{state=next;selected.clear();});manageProfiles();fit();return;}
+  if(el.id==='profile-select'){const next=switchSetupProfile(state,el.value);mutate(()=>{state=next;selected.clear();},{fitView:true});manageProfiles();return;}
   if(el.hasAttribute('data-size')||el.hasAttribute('data-size-lock')||el.hasAttribute('data-size-reference')){
     if(state.mode!=='edit')return;
     const draft=structuredClone(state),items=draft.objects.filter(o=>selected.has(o.id)&&canResize(o)&&canMoveObject(o,'edit'));
@@ -806,7 +818,6 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('keyup',e=>{if(e.code==='Space'){spaceDown=false;viewport.classList.remove('space-pan');}if(e.key==='Alt'&&drag)updateCardSnapPreview(false);});
 window.addEventListener('blur',()=>{spaceDown=false;viewport.classList.remove('space-pan');if(drag)endDrag({pointerId:drag.pointerId},true);});
 objects.addEventListener('keydown',e=>{if(e.key==='Enter'){const o=state.objects.find(o=>o.id===e.target.closest('.table-object')?.dataset.id);if(o)select(o,e.shiftKey);}});
-$('#modal').addEventListener('click',e=>{if(e.target===$('#modal')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
 $('#modal').addEventListener('close',()=>{if(!$('#modal').open&&state.awaitingOpening&&['opening-choice','expansion-choice'].includes($('#modal').dataset.kind))plaza.show('all').catch(error=>notify(error.message));});
 async function imageData(file){if(file.size>20*1024*1024)throw new Error('单张图片请小于 20 MB');if(!['image/png','image/jpeg','image/webp'].includes(file.type))throw new Error('只支持 PNG、JPG 和 WebP 图片');const image=await createImageBitmap(file);const scale=Math.min(1,1200/Math.max(image.width,image.height)),canvas=document.createElement('canvas');canvas.width=Math.round(image.width*scale);canvas.height=Math.round(image.height*scale);canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);image.close();return {data:canvas.toDataURL('image/webp',.9),width:canvas.width,height:canvas.height,name:file.name.replace(/\.[^.]+$/,'').slice(0,80)};}
 $('#asset-input').addEventListener('change',async e=>{
@@ -817,21 +828,13 @@ $('#asset-input').addEventListener('change',async e=>{
   }catch(error){notify(error.message);}
 });
 function finishImport(){const type=$('#import-type').value,p=viewportCenter();mutate(()=>{const ids=[];pendingImages.forEach((i,index)=>{const width=type==='card'?160:type==='board'?640:60,height=type==='card'?240:type==='board'?Math.max(40,Math.min(1600,640*i.height/i.width)):60;const asset={id:uid(),type,name:i.name,front:i.data,width,height};state.assets.push(asset);const o={...baseObject(type,p.x+index*25,p.y+index*25,type==='board'?0:nextZ(state)),assetId:asset.id,faceUp:true};if(type==='board'){o.width=width;o.height=height;}if(type==='token'){o.kind='custom';o.name=i.name;o.color='#c79e62';}state.objects.push(o);ids.push(o.id);});selected=new Set(ids);state.mode='edit';tab=type==='card'?'cards':type==='board'?'boards':'tokens';});pendingImages=[];$('#modal').close();notify('素材已加入，可右键查看属性');}
-$('#session-input').addEventListener('change',async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;try{if(file.size>50*1024*1024)throw new Error('存档请小于 50 MB');const imported=migrateSession(JSON.parse(await file.text()));await plaza.import(imported);notify('项目已导入，原项目也会保留');}catch(error){notify(`无法载入：${error.message}`);}});
 
 window.addEventListener('beforeunload',()=>{if(saveTimer&&workspaceLoaded&&!state.awaitingOpening){try{localStorage.setItem(RECOVERY,JSON.stringify({...state,updatedAt:Date.now()}));}catch{}}});
 new ResizeObserver(()=>{if(!drag&&!$('#app').hidden)fit();}).observe(viewport);
-function forgetDraft(ids){
+export function forgetDraft(ids){
   try{const recovery=JSON.parse(localStorage.getItem(RECOVERY)||'null');if(recovery&&ids.includes(recovery.projectId))localStorage.removeItem(RECOVERY);}catch{}
   if(!ids.includes(state.projectId))return;
   clearTimeout(saveTimer);saveTimer=null;workspaceLoaded=false;savedFingerprint='';state=createSession();selected.clear();history=[];future=[];rolling.clear();
 }
-plaza=createPlaza({flush:saveNow,activate:activateSession,notify,forgetDraft});
-async function initialize(){
-  try{
-    try{const recovery=localStorage.getItem(RECOVERY);if(recovery){const recovered=migrateSession(JSON.parse(recovery)),record=await (recovered.playOriginKey?projectStore.getPlay(recovered.playOriginKey):projectStore.get(recovered.projectId));if(!record||recovered.updatedAt>record.updatedAt)await projectStore.save(recovered);localStorage.removeItem(RECOVERY);}}catch(error){notify(`恢复存档未能读取，原文件已保留：${error.message}`);}
-    try{const legacy=localStorage.getItem(STORAGE);if(legacy&&!localStorage.getItem('tablecraft.legacy-migrated')){await projectStore.save(migrateSession(JSON.parse(legacy)));localStorage.setItem('tablecraft.legacy-migrated','yes');}}catch(error){notify(`旧桌面未能迁移，原存档已保留：${error.message}`);}
-    await plaza.show('all');
-  }catch(error){notify(`本地项目库未能读取：${error.message}`);$('#plaza-loading').textContent='项目库暂时无法读取。你可以导入导出的项目文件。';}
-}
-initialize();
+export function connectPlaza(controller){plaza=controller;}
+export function runAction(action){return actions[action]?.();}

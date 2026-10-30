@@ -1,8 +1,7 @@
 import {assetUrl} from './asset-url.js';
-import {examples,gameFor,createProject,copyProject,openEditor,createPlaySession} from './projects.js';
+import {exampleCatalog as examples} from './example-catalog.js';
 import {projectStore} from './project-store.js';
 import {findLibraryDraft,libraryName} from './library.js';
-import {uid} from './model.js';
 import {gameCatalog,classificationFor,CATALOG_CHECKED} from './game-catalog.js';
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const $=s=>document.querySelector(s);
@@ -11,6 +10,7 @@ const arrowIcon=icon('<path d="M5 12h14m-5-5 5 5-5 5"/>');
 const playersIcon=icon('<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M18 15a5 5 0 0 1 3 5"/>');
 const clockIcon=icon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>');
 const editIcon=icon('<path d="m14 5 5 5M4 20l5-1L20 8a3.5 3.5 0 0 0-5-5L4 14Z"/>');
+const previews=new Map(examples.flatMap(game=>game.preview.assets).map(asset=>[asset.front,asset]));
 export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
   let filter='all',projects=[],exhibits=[],busy=false,pendingRemoval=null,lastRemoval=null,pendingPlay=null;
   const notice=document.createElement('div');notice.className='library-notice';notice.hidden=true;notice.setAttribute('role','status');$('#plaza-grid').before(notice);
@@ -22,11 +22,15 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
     pendingRemoval={kind,id};
     const modal=$('#modal');modal.dataset.kind='library-removal';$('#modal-content').innerHTML=`<h2>${kind==='projects'?'删除草稿':'撤销发布'}？</h2><p class="modal-lead">${escape(entry.session.name)}<br>${kind==='projects'?'只删除本地草稿，作品广场已发布的版本会保留。':'只从作品广场撤下，本地草稿会保留。'}操作后可在当前页面撤销。</p><button class="primary-button" data-confirm-library-removal>${kind==='projects'?'删除草稿':'撤销发布'}</button><button class="full-width quiet" data-cancel-library-removal>取消</button>`;modal.classList.remove('wide');modal.showModal();
   }
-  function card(session,type,id){
+  function card(session,type,id,eager=false){
     const available=session.assets.filter(a=>a.type==='card');
-    const covers=(gameFor(session.gameId)?.coverAssetIds||[]).map(id=>available.find(a=>a.id===id)).filter(Boolean);
+    const covers=(examples.find(game=>game.id===session.gameId)?.coverAssetIds||[]).map(id=>available.find(a=>a.id===id)).filter(Boolean);
     const cards=(covers.length?covers:available).slice(0,3),image=session.assets.find(a=>a.type==='board'||a.type==='token');
-    const art=cards.length?cards.map(a=>'<img src="'+escape(assetUrl(a.front))+'" alt="" loading="lazy">').join(''):image?'<img class="single-cover" src="'+escape(assetUrl(image.front))+'" alt="" loading="lazy">':'<span>◇</span>';
+    const coverImage=(asset,single=false)=>{
+      const preview=previews.get(asset.front);
+      return '<img'+(single?' class="single-cover"':'')+' src="'+escape(assetUrl(preview?.thumbnail||asset.front))+'" alt="" loading="'+(eager?'eager':'lazy')+'" decoding="async" fetchpriority="'+(eager?'high':'low')+'"'+(preview?' width="'+preview.thumbnailWidth+'" height="'+preview.thumbnailHeight+'"':'')+'>';
+    };
+    const art=cards.length?cards.map(a=>coverImage(a)).join(''):image?coverImage(image,true):'<span>◇</span>';
     const attrs='="'+escape(id)+'"';
     const buttons=type==='project'?'<button data-plaza-project'+attrs+'><span>编辑草稿</span>'+arrowIcon+'</button>'+(session.mode==='play'?'<button class="secondary" data-resume-project'+attrs+'>继续游玩</button>':''):'<button data-plaza-'+type+attrs+'><span>开始游玩</span>'+arrowIcon+'</button><button class="secondary" data-edit-'+type+attrs+'>'+editIcon+'编辑游戏</button>';
     const exampleIndex=examples.findIndex(game=>game.id===session.gameId);
@@ -41,7 +45,7 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
   function renderCards(){
     const query=$('#plaza-search').value.trim().toLowerCase(),matches=s=>{const info=classificationFor(s.gameId);return [s.name,s.meta?.description,...info.tags,info.level?info.label:''].join(' ').toLowerCase().includes(query);},cards=[];
     if(filter==='all'){
-      for(const game of examples){if(exhibits.some(e=>libraryName(e.session.name)===libraryName(game.title)))continue;const s=game.create(()=>.5);s.name=game.title;if(matches(s))cards.push(card(s,'example',game.id));}
+      for(const game of examples){if(exhibits.some(e=>libraryName(e.session.name)===libraryName(game.title)))continue;const s=game.preview;if(matches(s))cards.push(card(s,'example',game.id,cards.length<3));}
       for(const entry of exhibits)if(matches(entry.session))cards.push(card(entry.session,'exhibit',entry.id));
     }else for(const entry of projects)if(matches(entry.session))cards.push(card(entry.session,'project',entry.id));
     $('#plaza-grid').innerHTML=cards.join('')||'<div class="plaza-empty"><span aria-hidden="true">'+icon('<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 8h.01M16 8h.01M12 12h.01M8 16h.01M16 16h.01"/>')+'</span><h3>'+ (query?'没有找到相关游戏':'灵感的第一步，从这里开始')+'</h3><p>'+(query?'换个关键词，发现另一种好玩。':'点击「新建游戏」，或从作品广场编辑一款喜欢的游戏。')+'</p></div>';
@@ -55,9 +59,11 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
   }
   async function openGame(source,originKey,edit,newExample=false){
     await flush();
-    const legacyNames=newExample?[examples.find(g=>g.id===source.gameId)?.create(()=>.5).name].filter(Boolean):[];
+    const {openEditor,copyProject,prepareSession}=await import('./project-session.js');
+    source=await prepareSession(source);
+    const legacyNames=newExample?[examples.find(g=>g.id===source.gameId)?.legacyName].filter(Boolean):[];
     const existing=findLibraryDraft(await projectStore.list(),source,originKey,legacyNames);
-    if(edit){await activate(openEditor(existing?.session||{...structuredClone(source),projectId:uid(),originKey}));return;}
+    if(edit){await activate(openEditor(existing?await prepareSession(existing.session):{...copyProject(source),originKey}));return;}
     const saved=await projectStore.getPlay(originKey);
     // Keep old play progress available without deleting potentially authored drafts.
     const previous=saved?.session||(existing?.session.mode==='play'&&!existing.session.awaitingOpening?existing.session:null);
@@ -70,6 +76,7 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
     await beginPlay(source,originKey,newExample);
   }
   async function beginPlay(source,originKey,newExample){
+    const {createPlaySession}=await import('./project-session.js');
     const opening=createPlaySession(source,originKey);
     await activate(opening,{newExample,chooseProfile:true});
   }
@@ -86,8 +93,8 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
         throw error;
       }finally{$('#plaza-loading').hidden=true;}
     },
-    async create(name){await flush();const existing=findLibraryDraft(await projectStore.list(),{name});if(existing){notify('已有同名草稿，已打开原草稿');await activate(openEditor(existing.session));return;}await activate(createProject('custom',name));},
-    async import(session){await flush();if(findLibraryDraft(await projectStore.list(),session))throw new Error('本地草稿已有同名游戏，请先修改草稿名称再导入');await activate(openEditor(copyProject(session)));},
+    async create(name){await flush();const {openEditor,createProject,prepareSession}=await import('./project-session.js');const existing=findLibraryDraft(await projectStore.list(),{name});if(existing){notify('已有同名草稿，已打开原草稿');await activate(openEditor(await prepareSession(existing.session)));return;}await activate(createProject('custom',name));},
+    async import(session){await flush();if(findLibraryDraft(await projectStore.list(),session))throw new Error('本地草稿已有同名游戏，请先修改草稿名称再导入');const {openEditor,copyProject,prepareSession}=await import('./project-session.js');await activate(openEditor(copyProject(await prepareSession(session))));},
     edit:session=>openGame(session,session.playOriginKey,true,session.playOriginKey?.startsWith('example:')),
     refresh:()=>api.show(filter)
   };
@@ -97,9 +104,9 @@ export function createPlaza({flush,activate,notify,forgetDraft=()=>{}}){
     if(b.dataset.plazaFilter){filter=b.dataset.plazaFilter;renderCards();return;}
     const d=b.dataset;
     if(b.hasAttribute('data-retry-library'))run(()=>api.show(filter));
-    if(d.plazaExample||d.editExample)run(async()=>{const game=examples.find(g=>g.id===(d.plazaExample||d.editExample));const source=createProject(game.id,game.title);await openGame(source,'example:'+game.id,!!d.editExample,true);});
+    if(d.plazaExample||d.editExample)run(async()=>{const {createProject}=await import('./project-session.js'),{loadGame}=await import('./game-registry.js');const game=examples.find(g=>g.id===(d.plazaExample||d.editExample));await loadGame(game.id);const source=createProject(game.id,game.title);await openGame(source,'example:'+game.id,!!d.editExample,true);});
     if(d.resumeProject)run(async()=>{await flush();const entry=await projectStore.get(d.resumeProject);if(!entry)throw new Error('进度未找到');await activate(entry.session);});
-    if(d.plazaProject)run(async()=>{await flush();const entry=await projectStore.get(d.plazaProject);if(!entry)throw new Error('草稿未找到');await activate(openEditor(entry.session));});
+    if(d.plazaProject)run(async()=>{await flush();const entry=await projectStore.get(d.plazaProject);if(!entry)throw new Error('草稿未找到');const {openEditor,prepareSession}=await import('./project-session.js');await activate(openEditor(await prepareSession(entry.session)));});
     if(d.plazaExhibit||d.editExhibit)run(async()=>{const entry=exhibits.find(x=>x.id===(d.plazaExhibit||d.editExhibit));if(!entry)throw new Error('作品未找到');await openGame(entry.session,'exhibit:'+entry.id,!!d.editExhibit);});
     if(d.unlist)confirmRemoval('exhibits',d.unlist);
     if(d.deleteDraft)confirmRemoval('projects',d.deleteDraft);
