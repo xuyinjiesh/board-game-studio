@@ -93,6 +93,24 @@ export function drawDestination(state,source){
 export function drawFromDeck(state,deck,faceUp,destination){
   return drawDeckCard(state,deck,deck.cards.length-1,faceUp,destination);
 }
+export function moveDeckContents(state,source,destination){
+  if(source?.type!=='deck'||source.locked||!source.cards.length||!state.objects.includes(source))throw new Error('来源牌堆为空、已锁定或已移除');
+  if(state.mode==='edit'&&state.objects.some(o=>o.type==='deal'&&o.sourceKey===source.setupKey))throw new Error('这个牌堆关联了初始牌位，请先移除这些牌位再移动全部');
+  const entries=deckEntries(source);
+  let target=destination?.deck;
+  if(target){
+    if(target===source)throw new Error('请选择其他牌堆');
+    if(!state.objects.includes(target)||!canReceiveCards(target,entries.length))throw new Error('目标牌堆已锁定或容量不足');
+    appendDeckEntries(target,entries);
+  }else{
+    if(!destination||!Number.isFinite(destination.x)||!Number.isFinite(destination.y)||Math.abs(destination.x)>10000||Math.abs(destination.y)>10000)throw new Error('请选择桌面范围内的位置');
+    const {w,h}=dimensions(state,source);
+    target={...baseObject('deck',destination.x,destination.y,nextZ(state)),name:source.name||'牌堆',cards:[],rotation:source.rotation,width:w,height:h};
+    replaceDeckEntries(target,entries);state.objects.push(target);
+  }
+  replaceDeckEntries(source,[]);
+  return target;
+}
 export function drawDeckCard(state,deck,index,faceUp,destination){
   if(deck.locked||!Number.isInteger(index)||index<0||index>=deck.cards.length)return null;
   destination??=drawDestination(state,deck);

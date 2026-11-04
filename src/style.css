@@ -96,7 +96,7 @@
 #app .table-object.deal.generated-pile{border:0;background:none;box-shadow:none}
 #deck-draw-tools{position:absolute;z-index:2000003;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;width:max-content;max-width:calc(100% - 16px);padding:7px;border:1px solid #b7c79b88;border-radius:10px;background:#263c2ff5;color:#f3efd9;box-shadow:0 5px 20px #10251d66}
 #deck-draw-tools[hidden]{display:none}
-.deck-scope-actions{display:flex;align-items:center;gap:5px}
+.deck-scope-actions{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
 #deck-draw-tools button{font-size:12px;border-radius:5px;padding:6px 9px;white-space:nowrap;color:inherit}
 #deck-draw-tools button:hover:not(:disabled){background:#e4d5a52c;color:#fff0bd}
 .deck-scope-actions kbd{font-size:9px;margin-left:4px}

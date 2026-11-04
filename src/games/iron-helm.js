@@ -25,7 +25,8 @@ const currentHero=s=>[...HEROES,...DLC_HEROES].find(h=>s.objects.some(o=>o.ihRol
 const limits={health:18,energy:14,blessing:12,weight:999,gold:999,rations:999,poison:999,morality:5,level:5,turn:9,eyes:99,foe:99};
 export function changeValue(s,key,delta,o=marker(s,key)){
   if(!o)throw new Error('缺少状态标记，可撤销桌面修改或开始新一局');
-  const h=currentHero(s),max=key==='health'?h.health:key==='energy'?h.energy:limits[key];
+  // The tabletop allows manual stat changes for equipment and expansion effects.
+  const max=limits[key];
   o.value=Math.max(key==='morality'?-5:key==='level'?1:0,Math.min(max,o.value+delta));
   syncMarker(s,o);
 }

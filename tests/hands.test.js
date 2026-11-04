@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createProject,startOpening,migrateSession,openEditor,saveEditorDraft} from '../src/projects.js';
 import {validateSession,drawFromDeck,objectsInRect} from '../src/model.js';
 import {findCardSnapTarget} from '../src/interactions.js';
-import {handCards,leaveHand,insertHandCard,sortHand,handFan} from '../src/hands.js';
+import {handCards,leaveHand,insertHandCard,sortHand,handFan,handInsertionIndex} from '../src/hands.js';
 import {redealNorthwood,prepareNorthwoodSession} from '../src/games/for-northwood.js';
 const fresh=()=>startOpening(createProject('for-northwood'),'nw-intro',()=>.45);
 
@@ -63,6 +63,28 @@ test('fan layout stays centered, overlaps cards, curves upward and fits narrow a
     if(count>1){assert.ok(fan[1].x-fan[0].x<fan[0].width);assert.ok(fan[0].angle<0&&fan.at(-1).angle>0);}
     if(count>2)assert.ok(fan[0].y>fan[Math.floor(count/2)].y);
   }
+});
+
+test('insertion preview reserves exactly the eventual card position without changing the hand',()=>{
+  for(const count of [0,1,7,12,32])for(const width of [288,720])for(let index=0;index<=count;index++){
+    const preview=handFan(count,width,index),settled=handFan(count+1,width);
+    assert.deepEqual(preview,settled.filter((_,i)=>i!==index));
+    assert.equal(preview.length,count);
+    assert.ok(preview.every(p=>Math.abs(p.x)+p.width/2<=width/2));
+  }
+});
+
+test('insertion targeting uses stable unexpanded centers, including both ends and an empty hand',()=>{
+  for(const count of [0,1,7,12])for(const width of [288,720]){
+    const fan=handFan(count,width);
+    assert.equal(handInsertionIndex(count,width,-width),0);
+    assert.equal(handInsertionIndex(count,width,width),count);
+    fan.forEach((p,i)=>{
+      assert.equal(handInsertionIndex(count,width,p.x-.01),i);
+      assert.equal(handInsertionIndex(count,width,p.x+.01),i+1);
+    });
+  }
+  assert.deepEqual(handFan(7,720,undefined),handFan(7,720));
 });
 
 test('legacy hand migration only takes cards in the authored hand row and runs once',()=>{

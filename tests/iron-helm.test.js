@@ -78,11 +78,11 @@ test('mid-decision saves survive import, copy, and setup resets without cross-sh
   for(const group of ['enemy','dungeon','potion','loot','plot'])assert.ok(pile(reset,group).cards.every(n=>n.startsWith(`ih-${group}-`)));
   assert.equal(value(reset,'turn'),0);assert.equal(reset.objects.find(o=>o.kind==='ih-level').ihProgress.turn.phase,'ready');assert.deepEqual(validateSession(reset),reset);
 });
-test('blessings stay face down, square tiles keep their own dimensions, and health caps at the hero maximum',()=>{
+test('blessings stay face down, square tiles keep their own dimensions, and stats use track limits',()=>{
   const s=createIronHelmSession();act(s,'draw','blessing');const b=s.objects.find(o=>o.ihRole==='blessing-owned');
   assert.equal(b.faceUp,false);assert.deepEqual(dimensions(s,b),{w:58,h:58});
   changeValue(s,'health',100);changeValue(s,'energy',100);changeValue(s,'morality',-100);
-  assert.equal(value(s,'health'),14);assert.equal(value(s,'energy'),11);assert.equal(value(s,'morality'),-5);
+  assert.equal(value(s,'health'),18);assert.equal(value(s,'energy'),14);assert.equal(value(s,'morality'),-5);
   assert.deepEqual(cards(s),all);const bad=structuredClone(s);bad.objects.find(o=>o.type==='token').value=NaN;assert.throws(()=>validateSession(bad));
 });
 
@@ -98,15 +98,37 @@ test('playmat and square markers have bundled assets and survive setup reset',()
   assert.deepEqual(cards(applySetup(s)),all);assert.deepEqual(validateSession(s),s);
 });
 
-test('moving a marker to a printed value updates its counter, with hero caps and transformed boards',()=>{
+test('moving a marker to a printed value updates its counter beyond starting stats and on transformed boards',()=>{
   const s=createIronHelmSession(),health=s.objects.find(o=>o.kind==='ih-health');
   Object.assign(health,matPoint(s,625,245));ironHelm.onTokenDrop(s,health);
   assert.equal(health.value,8);
   changeValue(s,'health',1);assert.deepEqual({x:health.x,y:health.y},matPoint(s,649,245));
-  Object.assign(health,matPoint(s,697,272));ironHelm.onTokenDrop(s,health);assert.equal(health.value,14);
+  Object.assign(health,matPoint(s,697,272));ironHelm.onTokenDrop(s,health);assert.equal(health.value,18);
   const board=s.objects.find(o=>o.type==='board');board.rotation=90;board.width=1000;board.height=1000*320/780;
   Object.assign(health,matPoint(s,673,218));ironHelm.onTokenDrop(s,health);assert.equal(health.value,3);
   health.x=-1000;health.y=-1000;ironHelm.onTokenDrop(s,health);assert.equal(health.value,3);
+});
+
+test('energy can be dragged and adjusted through 12–14 for every hero and survives reload',()=>{
+  for(const h of HEROES){
+    const s=createIronHelmSession(()=>.5,h.id),energy=s.objects.find(o=>o.kind==='ih-energy');
+    for(const rotation of [0,90]){
+      const board=s.objects.find(o=>o.assetId==='ih-playmat');
+      board.rotation=rotation;board.width=1000;board.height=1000*320/780;
+      for(const n of [12,13,14]){
+        Object.assign(energy,matPoint(s,625+(n-8)*24,337));ironHelm.onTokenDrop(s,energy);
+        assert.equal(energy.value,n);
+        assert.deepEqual({x:energy.x,y:energy.y},matPoint(s,625+(n-8)*24,337));
+      }
+    }
+    ironHelm.adjustToken(s,energy,1);assert.equal(energy.value,14);
+    ironHelm.adjustToken(s,energy,-3);assert.equal(energy.value,11);
+    for(const n of [12,13,14]){ironHelm.adjustToken(s,energy,1);assert.equal(energy.value,n);}
+    const restored=migrateSession(JSON.parse(JSON.stringify(s)));
+    assert.equal(value(restored,'energy'),14);
+    changeValue(restored,'energy',-1);assert.equal(value(restored,'energy'),13);
+    changeValue(restored,'energy',-100);assert.equal(value(restored,'energy'),0);
+  }
 });
 
 test('legacy iron helm saves gain the mat once without losing cards, counters or door decisions',()=>{

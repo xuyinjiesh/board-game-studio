@@ -116,10 +116,12 @@ test('hand tool takes priority on both objects and empty canvas',()=>{
 });
 test('counter scrolling respects game limits and adjusts the hovered duplicate only',()=>{
   const s=createIronHelmSession(),health=s.objects.find(o=>o.kind==='ih-health');
+  assert.equal(adjustTokenValue(s,health,1,ironHelm.adjustToken),true);assert.equal(value(s,'health'),15);
+  health.value=18;
   assert.equal(adjustTokenValue(s,health,1,ironHelm.adjustToken),false);
-  assert.equal(adjustTokenValue(s,health,-1,ironHelm.adjustToken),true);assert.equal(value(s,'health'),13);
+  assert.equal(adjustTokenValue(s,health,-1,ironHelm.adjustToken),true);assert.equal(value(s,'health'),17);
   const duplicate={...health,id:'duplicate',value:7};s.objects.push(duplicate);
-  adjustTokenValue(s,duplicate,1,ironHelm.adjustToken);assert.equal(duplicate.value,8);assert.equal(health.value,13);
+  adjustTokenValue(s,duplicate,1,ironHelm.adjustToken);assert.equal(duplicate.value,8);assert.equal(health.value,17);
   const poison=s.objects.find(o=>o.kind==='ih-poison');assert.equal(adjustTokenValue(s,poison,-1,ironHelm.adjustToken),false);
   const morality=s.objects.find(o=>o.kind==='ih-morality');morality.value=-5;assert.equal(adjustTokenValue(s,morality,-1,ironHelm.adjustToken),false);
   health.locked=true;assert.equal(adjustTokenValue(s,health,-1,ironHelm.adjustToken),false);

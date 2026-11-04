@@ -29,11 +29,19 @@ export function sortHand(s,by='suit'){
   cards.forEach((o,i)=>o.handOrder=i);
 }
 
-export function handFan(count,availableWidth){
+export function handInsertionIndex(count,availableWidth,x){
+  const i=handFan(count,availableWidth).findIndex(p=>x<p.x);
+  return i<0?count:i;
+}
+
+export function handFan(count,availableWidth,insertionIndex=null){
+  const hasSlot=Number.isInteger(insertionIndex)&&insertionIndex>=0&&insertionIndex<=count;
+  const total=count+(hasSlot?1:0);
   const width=Math.max(160,availableWidth),cardWidth=Math.min(128,Math.max(86,width*.24));
-  const step=count>1?Math.min(cardWidth*.63,(width-cardWidth-16)/(count-1)):0;
+  const step=total>1?Math.min(cardWidth*.63,(width-cardWidth-16)/(total-1)):0;
   return Array.from({length:count},(_,i)=>{
-    const t=count>1?(i-(count-1)/2)/((count-1)/2):0;
-    return {x:(i-(count-1)/2)*step,y:14+t*t*11,angle:t*Math.min(7,(count-1)*1.5),width:cardWidth,height:cardWidth*1.397,z:10+i};
+    const slot=i+(hasSlot&&i>=insertionIndex?1:0);
+    const t=total>1?(slot-(total-1)/2)/((total-1)/2):0;
+    return {x:(slot-(total-1)/2)*step,y:14+t*t*11,angle:t*Math.min(7,(total-1)*1.5),width:cardWidth,height:cardWidth*1.397,z:10+slot};
   });
 }

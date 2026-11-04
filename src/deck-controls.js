@@ -2,7 +2,7 @@ import {assetFor,deckEntries} from './model.js';
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function deckControlsHTML(deck,keys){
   const button=(action,label,key,disabled=false)=>`<button data-action="${action}" ${disabled?'disabled':''}>${label}${key?` <kbd>${escape(key)}</kbd>`:''}</button>`;
-  return `<div class="deck-scope-actions">${button('draw','发牌',keys.roll,!deck.cards.length)+button('search-deck','搜寻',keys.searchDeck,!deck.cards.length)+button('shuffle','洗牌',keys.rotate,deck.cards.length<2)}</div>`;
+  return `<div class="deck-scope-actions">${button('draw','发牌',keys.roll,!deck.cards.length)+button('search-deck','搜寻',keys.searchDeck,!deck.cards.length)+button('shuffle','洗牌',keys.rotate,deck.cards.length<2)+button('move-all','移动全部',null,deck.locked||!deck.cards.length)}</div>`;
 }
 export function deckSearchHTML(state,deck){
   const entries=deckEntries(deck).map((card,index)=>({...card,index})).reverse();
