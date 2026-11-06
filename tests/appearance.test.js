@@ -8,7 +8,7 @@ const key='tablecraft.appearance.v1';
 function setup({saved=null,dark=false,blocked=false}={}){
   const listeners={},windowListeners={},mediaListeners={};
   const stored=new Map(saved===null?[]:[[key,saved]]);
-  const buttons=['light','dark'].map(mode=>({dataset:{colorModeChoice:mode},attributes:{},setAttribute(name,value){this.attributes[name]=value;}}));
+  const buttons=['system','light','dark'].map(mode=>({dataset:{colorModeChoice:mode},attributes:{},setAttribute(name,value){this.attributes[name]=value;}}));
   const document={documentElement:{dataset:{}},querySelectorAll:()=>buttons,addEventListener:(name,fn)=>listeners[name]=fn};
   const media={matches:dark,addEventListener:(name,fn)=>mediaListeners[name]=fn};
   const window={matchMedia:()=>media,addEventListener:(name,fn)=>windowListeners[name]=fn};
@@ -28,8 +28,21 @@ test('first visit applies the system palette before DOM ready without saving an 
   const app=setup({dark:true});
   assert.equal(app.mode(),'dark');
   assert.equal(app.saved(),undefined);
-  app.ready();assert.deepEqual(app.selected(),['dark']);
+  app.ready();assert.deepEqual(app.selected(),['system']);
   app.system(false);assert.equal(app.mode(),'light');
+  assert.deepEqual(app.selected(),['system']);
+});
+
+test('selecting system restores automatic switching after a manual choice and persists across reloads',()=>{
+  const app=setup({saved:'light',dark:true});
+  app.click('system');
+  assert.equal(app.mode(),'dark');assert.equal(app.saved(),'system');
+  assert.deepEqual(app.selected(),['system']);
+  app.system(false);assert.equal(app.mode(),'light');
+  app.system(true);assert.equal(app.mode(),'dark');
+  const reloaded=setup({saved:app.saved(),dark:false});
+  assert.equal(reloaded.mode(),'light');assert.deepEqual(reloaded.selected(),['system']);
+  reloaded.system(true);assert.equal(reloaded.mode(),'dark');
 });
 test('saved choice overrides the system, and manual choices persist independently of later system changes',()=>{
   const app=setup({saved:'light',dark:true});
@@ -48,6 +61,8 @@ test('blocked browser storage does not prevent either mode from being selected',
   app.click('light');assert.equal(app.mode(),'light');
   app.system(true);assert.equal(app.mode(),'light');
   app.click('dark');assert.deepEqual(app.selected(),['dark']);
+  app.click('system');assert.deepEqual(app.selected(),['system']);
+  app.system(false);assert.equal(app.mode(),'light');
 });
 test('other tabs synchronize choices and clearing the preference restores the system default',()=>{
   const app=setup({saved:'light',dark:false});
@@ -56,4 +71,8 @@ test('other tabs synchronize choices and clearing the preference restores the sy
   app.storage(null);assert.equal(app.mode(),'light');
   app.system(true);assert.equal(app.mode(),'dark');
   app.storage('light');app.storage(null,null);assert.equal(app.mode(),'dark');
+  assert.deepEqual(app.selected(),['system']);
+  app.storage('light');app.storage('system');assert.equal(app.mode(),'dark');
+  app.system(false);assert.equal(app.mode(),'light');
+  assert.deepEqual(app.selected(),['system']);
 });

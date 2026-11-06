@@ -2,14 +2,14 @@
 (()=>{
   const storageKey='tablecraft.appearance.v1';
   const system=window.matchMedia('(prefers-color-scheme: dark)');
-  const valid=value=>value==='light'||value==='dark';
-  let choice=null;
+  const valid=value=>value==='system'||value==='light'||value==='dark';
+  let choice='system';
   try{const saved=localStorage.getItem(storageKey);if(valid(saved))choice=saved;}catch{}
   function render(){
-    const mode=choice||(system.matches?'dark':'light');
+    const mode=choice==='system'?(system.matches?'dark':'light'):choice;
     document.documentElement.dataset.colorMode=mode;
     document.querySelectorAll('[data-color-mode-choice]').forEach(button=>{
-      button.setAttribute('aria-pressed',String(button.dataset.colorModeChoice===mode));
+      button.setAttribute('aria-pressed',String(button.dataset.colorModeChoice===choice));
     });
   }
   render();
@@ -21,10 +21,10 @@
     render();
     try{localStorage.setItem(storageKey,choice);}catch{}
   });
-  system.addEventListener('change',()=>{if(!choice)render();});
+  system.addEventListener('change',()=>{if(choice==='system')render();});
   window.addEventListener('storage',event=>{
     if(event.key!==storageKey&&event.key!==null)return;
-    choice=valid(event.newValue)?event.newValue:null;
+    choice=valid(event.newValue)?event.newValue:'system';
     render();
   });
 })();

@@ -85,7 +85,8 @@
 .token-sample .ih-token>b{font-size:20px}
 @media(max-width:760px){#app #game-controls{top:12px;max-width:calc(100% - 220px)}#app[data-mode="edit"] #game-controls{top:86px}.ih-toolbar{gap:8px;padding:4px 7px}.ih-toolbar .ih-title{font-size:13px}.ih-toolbar button{padding:5px 7px;font-size:11px}}
 @media(max-width:420px){#app #game-controls{top:64px;max-width:calc(100% - 24px)}}
-.profile-list.profile-cards{grid-template-columns:repeat(var(--profile-columns,4),minmax(0,1fr));gap:16px}
+dialog:has(.profile-cards>button:nth-child(3)){width:940px}
+.profile-list.profile-cards{grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:16px}
 .profile-cards>button{padding:12px;align-items:stretch}
 .profile-cards img{display:block;width:min(100%,160px);align-self:center;aspect-ratio:5/7;object-fit:contain;border-radius:6px;box-shadow:0 3px 8px #0003;margin-bottom:5px}
 .profile-cards>button>small:last-child{margin-top:auto}
@@ -122,7 +123,7 @@ dialog:has(.deck-search-list){width:640px}
 #app[data-mode="edit"] .pile-guide{display:block;inset:-2px;border:2px dashed #ffe3a0;border-radius:8px;box-shadow:0 0 0 1px #162a22,inset 0 0 0 1px #162a22;background:#ffe3a00a;z-index:3}
 #app[data-mode="edit"] .fixed-position:is(:hover,.selected) .pile-guide{border-style:solid;border-color:#fff0bd;box-shadow:0 0 0 3px #edc77955,inset 0 0 0 1px #162a22}
 #app[data-mode="edit"] .pile-label{display:block;top:8px;left:8px;max-width:calc(100% - 16px);padding:4px 7px;border:1px solid #e3c794;border-radius:4px;background:#263c2ff2;color:#fff0bd;font-size:12px;line-height:1.4;overflow-wrap:anywhere;z-index:4}
-@media(max-width:760px){.profile-list.profile-cards{grid-template-columns:repeat(var(--profile-compact-columns,2),minmax(0,1fr));gap:10px}}
+@media(max-width:760px){.profile-list.profile-cards{gap:12px}}
 @media(max-width:420px){.profile-list.profile-cards{grid-template-columns:1fr}}
 #app .scene[data-game="iron-helm"] .card:is(:hover,.selected):not(.dragging) .card-lift{transform:none}
 #app .scene[data-game="iron-helm"] .card:is(:hover,.selected):not(.dragging) .card-shadow{transform:none}
