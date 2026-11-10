@@ -2,6 +2,8 @@
 export const CATALOG_CHECKED='2026-10-29';
 const bgg=(id,name,weight)=>({name,weight,url:`https://boardgamegeek.com/boardgame/${id}`});
 export const gameCatalog={
+  'tin-helm':{name:'锡盔',tags:['地牢探险','风险抉择','资源管理'],ratings:[bgg(347900,'锡盔',1.46)],note:'2026-11-06 核对；复杂度参考基础版，奖励卡另行选用。'},
+  friday:{name:'星期五',tags:['牌库构筑','风险抉择','资源管理'],ratings:[bgg(43570,'星期五',2.16)],note:'2026-11-06 核对；四档难度均基于同一基础规则。'},
   grove:{name:'果丛',tags:['空间拼放','图案构建'],ratings:[{...bgg(329873,'果丛',1.31),url:'https://boardgameoftheyear.org/game/329873?summary=alltime',indirect:true}]},
   'iron-helm':{name:'铁盔',tags:['地牢探险','风险抉择','资源管理'],ratings:[bgg(273264,'铁盔',2.05)]},
   'pocket-paladin':{name:'口袋骑士',tags:['地图探索','角色成长','资源规划'],ratings:[bgg(444915,'口袋骑士',4.00)],note:'社区评价较少，分数仅供参考。'},

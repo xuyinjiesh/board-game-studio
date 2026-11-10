@@ -13,6 +13,10 @@ README 介绍整体功能；详细操作、内部实现、游戏专用行为与�
 
 ## 游戏文档
 
+- [锡盔 / Tin Helm](games/tin-helm.md)：双面组件、种族职业组合、基础与奖励地城、探索与换层辅助、手动战斗。
+
+- [星期五 / Friday](games/friday.md)：四档难度、危险二选一、衰老重洗、三轮阶段与海盗决战辅助。
+
 - [果丛 / Grove](games/grove.md)：默认开局、计分边界与果树格点。
 - [铁盔 / Iron Helm](games/iron-helm.md)：基础版、扩展组合、角色开局与素材提取。
 - [口袋骑士 / Pocket Paladin](games/pocket-paladin.md)：组件与开局、地图和卡面吸附、水晶状态同步。

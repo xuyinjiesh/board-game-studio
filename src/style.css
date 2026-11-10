@@ -210,3 +210,36 @@ dialog:has(.deck-search-list){width:640px}
 #app[data-game="mini-rogue"][data-mode="play"] .fixed-position:has(.empty-pile) .pile-guide{display:block;inset:0;border:2px dashed #d6b99155;border-radius:7px;background:#31243b22}
 #app[data-game="mini-rogue"][data-mode="play"] .fixed-position:has(.empty-pile) .pile-label{top:50%;transform:translate(-50%,-50%);width:90%;font-size:18px}
 @media(max-width:600px){.mr-toolbar{gap:5px;padding:6px}.mr-toolbar button{font-size:11px;padding:6px 8px}.mr-toolbar>span{flex-basis:100%;text-align:center;order:2}}
+
+/* Friday keeps the original Chinese cards on a warm, readable island table. */
+#app[data-game="friday"][data-mode] #game-controls{top:auto;bottom:16px;max-width:calc(100% - 32px)}
+#app[data-mode] .scene[data-game="friday"] .fr-zone{display:block;border:0;text-align:left;color:#f5e6b8}
+.scene[data-game="friday"] .fr-zone>span{font-size:22px;letter-spacing:2px}
+.scene[data-game="friday"] .fr-zone>small{font-size:14px;line-height:1.6;letter-spacing:.3px;opacity:.8}
+.fr-toolbar{display:flex;flex-direction:column;gap:6px;max-width:calc(100vw - 32px);padding:9px 13px;border:1px solid #c7c58255;border-radius:10px;background:#253a24f2;color:#f7edd0;box-shadow:0 5px 25px #0005;backdrop-filter:blur(12px)}
+.fr-toolbar>div{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
+.fr-toolbar button{padding:7px 11px;border:1px solid #dad39c44;border-radius:5px;background:#ffffff08;color:inherit;font-size:12px}
+.fr-toolbar button:hover{background:#c8d88d22}.fr-toolbar button:disabled{opacity:.4;cursor:default}
+.fr-vitals{font-size:12px;font-variant-numeric:tabular-nums}.fr-vitals i{font-style:normal;color:#d4e8a7;margin:0 9px}.fr-toolbar small{font-size:10px;opacity:.65}
+.fr-token{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff7d8;line-height:1.1;text-shadow:0 1px 2px #0008}.fr-token small{font-size:11px}.fr-token b{font-size:24px}
+#app[data-game="friday"][data-mode="play"] .fixed-position .pile-label{display:block;top:calc(100% + 23px);left:50%;width:160%;max-width:none;transform:translateX(-50%) rotate(calc(-1 * var(--angle)));font-size:15px;line-height:1.5;text-align:center;color:#f5e6b8;text-shadow:0 1px 3px #10251d;background:none;border:0}
+#app[data-game="friday"][data-mode="play"] .fixed-position:has(.empty-pile) .pile-guide{display:block;inset:0;border:2px dashed #d9d39c66;border-radius:8px;background:#58683e11}
+#app[data-game="friday"][data-mode="play"] .fixed-position:has(.empty-pile) .pile-label{top:50%;transform:translate(-50%,-50%) rotate(calc(-1 * var(--angle)));width:90%;font-size:17px}
+@media(max-width:600px){.fr-toolbar{padding:6px 8px;gap:4px}.fr-toolbar>div{gap:4px}.fr-toolbar button{font-size:11px;padding:6px 7px}.fr-vitals{flex-basis:100%;text-align:center;order:-1}.fr-toolbar small{display:none}}
+
+/* Tin Helm: monochrome print art, brass markers and a compact expedition bar. */
+#app[data-game="tin-helm"][data-mode] #game-controls{top:auto;bottom:12px;max-width:calc(100% - 28px)}
+#app[data-mode] .scene[data-game="tin-helm"] .th-zone{display:block;border:0;text-align:left;color:#eee5d3}
+.scene[data-game="tin-helm"] .th-zone>span{font-size:23px;letter-spacing:2px}
+.scene[data-game="tin-helm"] .th-zone>small{font-size:13px;line-height:1.6;opacity:.75}
+.th-toolbar{display:flex;flex-direction:column;gap:6px;max-width:calc(100vw - 28px);padding:10px 14px;background:#262622f5;border:1px solid #c7b78d55;border-radius:10px;color:#f1e5cb;box-shadow:0 5px 25px #0006;backdrop-filter:blur(12px)}
+.th-toolbar>div{display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap}
+.th-toolbar button,.th-toolbar select{border:1px solid #c7b78d55;background:#ffffff08;color:inherit;border-radius:5px;padding:6px 10px;font-size:12px}
+.th-toolbar button:hover{background:#c7b78d26}.th-toolbar button:disabled{opacity:.4;cursor:default}.th-toolbar span{font-size:12px;font-variant-numeric:tabular-nums}.th-toolbar small{font-size:10px;opacity:.65}.th-toolbar option{background:#262622}
+.th-token{display:flex;align-items:center;justify-content:center;flex-direction:column;line-height:1.1;color:#fff8e6;text-shadow:0 1px 2px #0009}.th-token small{font-size:10px}.th-token b{font-size:22px}.th-track-token small{display:none}.th-track-token b{font-size:12px}
+.th-select{display:block;width:100%;padding:12px;margin:12px 0 20px;border:1px solid #9f9172;border-radius:6px;background:#f7f1e5;color:#24241f;font-size:14px}
+.th-catalog{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:15px;margin:14px 0 30px}.th-catalog article{display:flex;flex-direction:column;align-items:center;gap:7px;font-size:13px}.th-catalog img{width:100%;max-width:170px;border-radius:5px}.th-catalog button{font-size:12px;padding:6px 10px}.th-catalog small{opacity:.55}
+#app[data-game="tin-helm"][data-mode="play"] .fixed-position .pile-label{display:block;top:calc(100% + 23px);left:50%;width:155%;max-width:none;transform:translateX(-50%);font-size:14px;line-height:1.5;text-align:center;color:#e0d4bd;text-shadow:0 1px 3px #000;background:none;border:0}
+#app[data-game="tin-helm"][data-mode="play"] .fixed-position:has(.empty-pile) .pile-guide{display:block;inset:0;border:2px dashed #c7b78d55;border-radius:7px;background:#c7b78d09}
+#app[data-game="tin-helm"][data-mode="play"] .fixed-position:has(.empty-pile) .pile-label{top:50%;transform:translate(-50%,-50%);width:90%;font-size:16px}
+@media(max-width:650px){.th-toolbar{gap:4px;padding:6px 8px}.th-toolbar>div{gap:4px}.th-toolbar button,.th-toolbar select{padding:5px 7px;font-size:11px}.th-toolbar small{display:none}.th-toolbar span{font-size:10px}.th-catalog{grid-template-columns:repeat(2,minmax(0,1fr))}}

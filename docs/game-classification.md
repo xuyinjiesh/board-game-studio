@@ -6,6 +6,8 @@
 
 | 游戏 | 分类标签 | 复杂度 / 5 | 公开来源 |
 | --- | --- | --- | --- |
+| 锡盔 | 地牢探险、风险抉择、资源管理 | 1.46 | [BGG](https://boardgamegeek.com/boardgame/347900/tin-helm)，2026-11-06 单独核对；基础版参考 |
+| 星期五 | 牌库构筑、风险抉择、资源管理 | 2.16 | [BGG](https://boardgamegeek.com/boardgame/43570/friday)，2026-11-06 单独核对 |
 | 果丛 | 空间拼放、图案构建 | 1.31 | [BGG 原条目](https://boardgamegeek.com/boardgame/329873)；数值通过 [Board Game of the Year](https://boardgameoftheyear.org/game/329873?summary=alltime) 转引，BGG 原页未返回复杂度字段 |
 | 铁盔 | 地牢探险、风险抉择、资源管理 | 2.05 | [BGG](https://boardgamegeek.com/boardgame/273264/iron-helm) |
 | 口袋骑士 | 地图探索、角色成长、资源规划 | 4.00 | [BGG](https://boardgamegeek.com/boardgame/444915/pocket-paladin)；该条目整体社区评价较少，仅供参考，未获取复杂度投票人数 |

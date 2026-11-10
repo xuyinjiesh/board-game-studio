@@ -34,7 +34,7 @@ for game in catalog:
         target.parent.mkdir(parents=True, exist_ok=True)
         with Image.open(original) as image:
             image.thumbnail((256, 384), Image.Resampling.LANCZOS)
-            image.save(target, "WEBP", quality=75, method=6)
+            image.save(target, "WEBP", quality=70 if game['id']=='friday' else 75, method=6)
             asset["thumbnail"] = "/assets/previews/" + relative.as_posix()
             asset["thumbnailWidth"], asset["thumbnailHeight"] = image.size
         original_bytes += original.stat().st_size

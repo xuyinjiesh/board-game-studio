@@ -1,0 +1,93 @@
+"""Extract the supplied Chinese Tin Helm print sheets using Poppler and Pillow.
+
+Usage: python scripts/extract-tin-helm.py <锡盔分享素材.pdf>
+Odd/even sheets are paired with columns mirrored (long-edge duplex).
+"""
+from pathlib import Path
+import json
+import shutil
+import subprocess
+import sys
+from PIL import Image
+
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE = Path(sys.argv[1])
+OUT = ROOT / 'public/assets/tin-helm'
+TMP = ROOT / 'tmp/pdfs/tin-helm/hires'
+OUT.mkdir(parents=True, exist_ok=True)
+TMP.mkdir(parents=True, exist_ok=True)
+subprocess.run(['pdftoppm', '-scale-to', '2400', '-png', str(SOURCE), str(TMP/'page')], check=True)
+pages = {}
+assets = []
+
+def crop(page, row, col, code, grid=4):
+    if page not in pages:
+        pages[page] = Image.open(TMP/f'page-{page:02}.png').convert('RGB')
+    im = pages[page]
+    # Coordinates measured against a 1300px render, inside the print marks.
+    if grid == 3:
+        x, y, w, h = 7+col*301.5, 31+row*412.3, 300, 411
+    else:
+        x, y, w, h = (38 if page%2==0 else 7)+col*218.8, 31+row*302.5, 218, 301.5
+    factor = im.height/1300
+    box = tuple(round(n*factor) for n in (x,y,x+w,y+h))
+    im.crop(box).save(OUT/f'{code}.webp', quality=91, method=6)
+    return f'/assets/tin-helm/{code}.webp'
+
+labels = dict(hero='种族／职业', dungeon='地城', enemy='敌人', loot='战利品', trapping='双面装备', reference='事件参考', track='属性轨道')
+
+def add(code, name, group, p, r, c, back=None, grid=4, **data):
+    front = crop(p,r,c,code,grid)
+    rear = crop(*back,code+'-back',grid) if back else None
+    assets.append(dict(id='th-'+code, name=name, type='board' if group=='track' else 'card',
+        group=group, groupLabel=labels[group], width=160, height=220,
+        front=front, **({'back':rear} if rear else {}), sourcePage=p, sourceRow=r, sourceColumn=c, **data))
+
+for c,(code,name) in enumerate([('altar','祭坛 / 营地'),('grove','蘑菇林 / 迷宫'),('shrine','圣所 / 猪面人')]):
+    add('ref-'+code,name,'reference',1,0,c,(2,0,2-c),3)
+
+heroes=[('merfolk','鱼人','parson','牧师',1,1,0,7,8,1,4,3,[3,5,7],['mace','scroll']),
+ ('human','人类','alchemist','炼金术师',1,1,1,9,7,0,3,4,[2,4,6],['books','potion']),
+ ('kroling','鸦人','footpad','潜行者',1,1,2,8,8,0,3,3,[2,5,7],['dagger','toolkit']),
+ ('gnome','地精','marauder','掠夺者',1,2,0,6,9,1,5,3,[3,4,6],['axe','bedroll']),
+ ('orc','半兽人','druid','德鲁伊',1,2,1,9,9,1,3,3,[2,5,7],['books','charm']),
+ ('halfling','半身人','berserker','狂战士',1,2,2,7,8,2,5,3,[3,4,6],['potion','scimitar']),
+ ('catfolk','猫人','adventurer','冒险家',3,2,0,8,8,2,3,3,[2,4,7],['bedroll','potion','dagger']),
+ ('construct','人造人','oracle','先知',3,2,1,9,7,1,2,4,[2,4,6],['dagger','crystal']),
+ ('pigfolk','猪人','bonecrusher','碎骨者',3,2,2,6,7,2,5,1,[2,4,8],['mace','bracer'])]
+for i,(code,name,job,jobname,p,r,c,hp,en,food,ch,ce,damage,items) in enumerate(heroes):
+    add('hero-'+code,name+' / '+jobname,'hero',p,r,c,(p+1,r,2-c),3,
+        race=code,raceName=name,job=job,jobName=jobname,hp=hp,energy=en,food=food,
+        bonusHp=ch,bonusEnergy=ce,damage=damage,items=items,bonus=i>=4)
+
+for code,name,r,c in [('health','生命',0,1),('level','层数／敌人生命',0,2),('favor','声望',1,0),('energy','能量／食物',1,1)]:
+    add('track-'+code,name+'指示卡','track',3,r,c,grid=3)
+add('ref-charm','魅惑暗黑鼠参考','reference',3,0,0,grid=3)
+
+enemy_data=[('wraith','怨灵',5,1,0,2),('watcher','监视者',4,1,1,2),('speyeder','蛛形怪',3,1,0,1),('skelepede','骨蜈蚣',3,0,1,1),('rats','暗黑鼠',2,0,0,1),('possessor','附身灵',6,1,1,2),('mimic','宝箱怪',4,1,1,0),('doom','厄运头骨',4,0,0,1)]
+enemy_back=crop(6,0,0,'enemy-back')
+loot_back=crop(6,2,0,'loot-back')
+for i,(code,name,hp,attack,defense,favor) in enumerate(enemy_data):
+    add('enemy-'+code,name,'enemy',5,i//4,i%4,hp=hp,attack=attack,defense=defense,favor=favor)
+    assets[-1]['back']=enemy_back
+for i,(code,name) in enumerate([('symbol','圣徽'),('net','渔网'),('turnip','萝卜'),('wedge','门楔'),('sword','长剑'),('shield','盾牌'),('ring','戒指'),('potion','药剂')]):
+    add('loot-'+code,name,'loot',5,2+i//4,i%4)
+    assets[-1]['back']=loot_back
+
+rooms=[('catacombs','地下墓穴'),('chasm','裂谷'),('clearing','空地'),('corridor','回廊'),('kitchen','厨房'),('well','古井'),('quarters','营房'),('sanctum','圣所'),('sewers','下水道'),('stash','藏匿处'),('statue','雕像'),('waterfall','瀑布')]
+for i,(code,name) in enumerate(rooms):
+    r,c=divmod(i,4)
+    add('room-'+code,name,'dungeon',7,r,c,(8,r,3-c))
+for code,name,p,r,c,bp,br,bc in [('abyss','深渊',9,0,3,10,0,0),('tunnel','隧道',9,1,0,10,1,3)]:
+    add('room-'+code,name,'dungeon',p,r,c,(bp,br,bc),bonus=True)
+
+for code,name,other,p,r,c,bp,br,bc in [
+ ('axe','战斧','books',7,3,2,8,3,1),('bedroll','铺盖卷','potion',7,3,3,8,3,0),
+ ('mace','钉头锤','dagger',9,0,0,10,0,3),('scroll','卷轴','toolkit',9,0,1,10,0,2),
+ ('scimitar','弯刀','charm',9,0,2,10,0,1),('crystal','水晶','bracer',9,1,1,10,1,2)]:
+    add('gear-'+code,name+' / '+dict(books='书籍',potion='药剂',dagger='匕首',toolkit='工具包',charm='魅惑符',bracer='护腕')[other],
+        'trapping',p,r,c,(bp,br,bc),sides=[code,other],bonus=code in ['scimitar','crystal'])
+
+(ROOT/'src/games/tin-helm-assets.js').write_text('// Generated by scripts/extract-tin-helm.py\nexport const tinHelmAssets = '+json.dumps(assets,ensure_ascii=False,indent=2)+';\n',encoding='utf8')
+shutil.copyfile(SOURCE,OUT/'sheets-zh.pdf')
+print(f'Extracted {len(assets)} double/single-sided assets.')

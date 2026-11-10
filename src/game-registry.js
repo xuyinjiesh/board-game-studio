@@ -1,5 +1,7 @@
 const games=new Map(),pending=new Map(),legacyAssets=new Map();
 const loaders={
+  'tin-helm':()=>import('./games/tin-helm.js').then(module=>({game:module.tinHelm})),
+  friday:()=>import('./games/friday.js').then(module=>({game:module.friday})),
   grove:()=>import('./games/grove.js').then(module=>({game:module.grove,assets:module.builtinAssets})),
   'iron-helm':()=>import('./games/iron-helm.js').then(module=>({game:module.ironHelm})),
   'pocket-paladin':()=>import('./games/pocket-paladin.js').then(module=>({game:module.pocketPaladin})),

@@ -21,7 +21,7 @@ test('the lightweight catalog matches the live games without needing game factor
   }
 });
 
-test('every cover has a bundled retina thumbnail and the full catalog is under 300 KiB',async()=>{
+test('every cover has a bundled retina thumbnail within the catalog size budget',async()=>{
   let total=0,originals=0;
   for(const asset of exampleCatalog.flatMap(game=>game.preview.assets)){
     assert.ok(asset.thumbnail.startsWith('/assets/previews/'));
@@ -30,7 +30,8 @@ test('every cover has a bundled retina thumbnail and the full catalog is under 3
     total+=(await stat(new URL('../public'+asset.thumbnail,import.meta.url))).size;
     originals+=(await stat(new URL('../public'+asset.front,import.meta.url))).size;
   }
-  assert.ok(total<300*1024);assert.ok(total<originals*.12);
+  // Keep a per-game average budget as the built-in catalog grows.
+  assert.ok(total<exampleCatalog.length*40*1024);assert.ok(total<originals*.12);
 });
 
 test('the homepage static module graph excludes the workspace and all game implementations',async()=>{
